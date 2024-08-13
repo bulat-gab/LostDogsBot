@@ -7,9 +7,10 @@ class Settings(BaseSettings):
     API_ID: int
     API_HASH: str
     
-    BOT_TOKEN: bool
+    BOT_TOKEN: str
     ADMIN_UID: int
     
+    RANDOM_CARD: bool = False
     AUTO_TASK: bool = True
 
     USE_PROXY_FROM_FILE: bool = False

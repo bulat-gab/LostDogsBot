@@ -345,9 +345,7 @@ class Tapper:
             }
             response = await http_client.post(f'https://api.getgems.io/graphql', json=json_data)
             response_json = await response.json()
-            if response_json['data']['lostDogsWaySaveEvent']:
-                logger.info(f"{self.session_name} | Игровое событие <m>{event_name}</m> успешно сохранено")
-            else:
+            if not response_json['data']['lostDogsWaySaveEvent']:
                 logger.warning(f"{self.session_name} | Не удалось сохранить игровое событие: <m>{event_name}</m>")
         except Exception as error:
             logger.error(f"{self.session_name} | Неизвестная ошибка при сохранении игрового события: {error}")
@@ -355,29 +353,39 @@ class Tapper:
 
     async def way_vote(self, http_client: aiohttp.ClientSession, card_number: int = None):
         try:
+            event_data = {
+                    "mainScreenVote": True,
+                    "timeMs": int(time() * 1000)
+                }
+            await self.save_game_event(http_client, event_data, event_name="MainScreen Vote")
+            await asyncio.sleep(delay=randint(1, 3))
+            
             json_data = {
                 "operationName": "lostDogsWayVote",
                 "variables": {
-                    "input": {
-                        "roundCardValue": card_number,
-                        "spentGameDogsCount": 1
-                    }
+                    "value": str(card_number)
                 },
                 "extensions": {
                     "persistedQuery": {
                         "version": 1,
-                        "sha256Hash": "4a1f2c0e0e4c2a8b9c1d3f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6"
+                        "sha256Hash": "6fc1d24c3d91a69ebf7467ebbed43c8837f3d0057a624cdb371786477c12dc2f"
                     }
                 }
             }
+
             response = await http_client.post(f'https://api.getgems.io/graphql', json=json_data)
             response_json = await response.json()
-            if response_json['data']['lostDogsWayVote']:
-                card = response_json['data']['lostDogsWayVote']['selectedRoundCardValue']
-                spend_bones = response_json['data']['lostDogsWayVote']['spentGameDogsCount']
-                logger.success(f"{self.session_name} | Успешное голосование! | Выбранная карта: <m>{card}</m> | "
+            response.raise_for_status()
+
+            response_data = response_json['data']['lostDogsWayVote']
+            card = response_data['selectedRoundCardValue']
+            spend_bones = response_data['spentGameDogsCount']
+
+            logger.success(f"{self.session_name} | Успешное голосование! | Выбранная карта: <m>{card}</m> | "
                                f"Потрачено костей: <m>{spend_bones}</m> ")
-            return response_json['data']['lostDogsWayVote']
+
+            return response_data
+
         except Exception as error:
             logger.error(f"{self.session_name} | Неизвестная ошибка при голосовании: {error}")
             await asyncio.sleep(delay=3)
@@ -414,20 +422,29 @@ class Tapper:
                 await asyncio.sleep(delay=randint(5, 10))
 
                 current_round = user_info['data']['lostDogsWayUserInfo'].get('currentRoundVote')
-                if not current_round and card_number is not None:
-                    await self.way_vote(http_client=http_client, card_number=card_number)
+                if current_round is None:
+                    logger.info(f"{self.session_name} | Текущий раунд не найден, пробуем голосовать")
+                    if card_number is not None:
+                        await self.way_vote(http_client=http_client, card_number=card_number)
                 else:
-                    card = current_round['selectedRoundCardValue']
-                    spend_bones = current_round['spentGameDogsCount']
-                    logger.info(
-                        f"{self.session_name} | Проголосовали за карту: <m>{card}</m> | Потрачено костей: <m>{spend_bones}</m>")
+                    if isinstance(current_round, dict) and 'selectedRoundCardValue' in current_round and 'spentGameDogsCount' in current_round:
+                        card = current_round['selectedRoundCardValue']
+                        spend_bones = current_round['spentGameDogsCount']
+                        logger.info(
+                            f"{self.session_name} | Проголосовали за карту: <m>{card}</m> | Потрачено костей: <m>{spend_bones}</m>"
+                        )
+                    else:
+                        logger.warning(f"{self.session_name} | Некорректные данные текущего раунда: {current_round}")
 
                 game_status = await self.get_game_status(http_client=http_client)
-                game_end_at = datetime.fromtimestamp(int(game_status['gameState']['gameEndsAt']))
-                round_end_at = max(game_status['gameState']['roundEndsAt'] - time(), 0)
-                logger.info(
-                    f"{self.session_name} | Текущий раунд заканчивается через: <m>{int(round_end_at / 60)}</m> мин | "
-                    f"Игра заканчивается: <m>{game_end_at}</m>")
+                if game_status and 'gameState' in game_status:
+                    game_end_at = datetime.fromtimestamp(int(game_status['gameState'].get('gameEndsAt', 0)))
+                    round_end_at = max(game_status['gameState'].get('roundEndsAt', 0) - time(), 0)
+                    logger.info(
+                        f"{self.session_name} | Текущий раунд заканчивается через: <m>{int(round_end_at / 60)}</m> мин | "
+                        f"Игра заканчивается: <m>{game_end_at}</m>")
+                else:
+                    logger.warning(f"{self.session_name} | Не удалось получить статус игры")
 
             sleep_time = randint(900, 1200)
             logger.info(f"{self.session_name} | Сон <m>{sleep_time}</m> секунд")

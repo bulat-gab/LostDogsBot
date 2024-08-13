@@ -14,13 +14,15 @@ class TelegramBot:
         await self.dp.start_polling(self.bot)
 
     async def start_handler(self, message: types.Message):
-        if str(message.from_user.id) == settings.ADMIN_UID:
+        print(f"User ID: {message.from_user.id}, Admin UID: {settings.ADMIN_UID}")
+        if str(message.from_user.id) in str(settings.ADMIN_UID):
             await message.reply("Привет, админ! Я бот для голосования. Используй /vote <номер_карты> для голосования.")
         else:
             await message.reply("У вас нет доступа к этому боту.")
 
     async def vote_handler(self, message: types.Message):
-        if str(message.from_user.id) != settings.ADMIN_UID:
+        print(f"User ID: {message.from_user.id}, Admin UID: {settings.ADMIN_UID}")
+        if str(message.from_user.id) not in str(settings.ADMIN_UID):
             await message.reply("У вас нет доступа к этой команде.")
             return
 
