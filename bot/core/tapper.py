@@ -27,6 +27,7 @@ tapper_instances = {}
 class Tapper:
     def __init__(self, tg_client: Client, proxy: str):
         self.tg_client = tg_client
+        self.tg_client_id = 0
         self.session_name = tg_client.name
         self.proxy = proxy
 
@@ -81,6 +82,9 @@ class Tapper:
             init_data = (f"user={user_data_encoded}&chat_instance={chat_instance}&chat_type={chat_type}&"
                          f"start_param={start_param}&auth_date={auth_date}&hash={hash_value}")
 
+            me = await self.tg_client.get_me()
+            self.tg_client_id = me.id
+            
             if self.tg_client.is_connected:
                 await self.tg_client.disconnect()
 
@@ -359,7 +363,7 @@ class Tapper:
             3: "fewgm"
         }
         try:
-            response = await http_client.get(f'https://api.notcoin.tg/profiles/by/telegram_id/{self.tg_client.me.id}')
+            response = await http_client.get(f'https://api.notcoin.tg/profiles/by/telegram_id/{self.tg_client_id}')
             response.raise_for_status()
             x_auth_token = response.headers.get('X-Auth-Token')
 
