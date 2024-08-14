@@ -390,7 +390,7 @@ class Tapper:
                     "mainScreenVote": True,
                     "timeMs": int(time() * 1000)
                 }
-            await self.join_squad(http_client=http_client, card_number=card_number) # Вступаем в сквад
+            #await self.join_squad(http_client=http_client, card_number=card_number) # Вступаем в сквад
             await self.save_game_event(http_client, event_data, event_name="MainScreen Vote")
             await asyncio.sleep(delay=randint(1, 3))
             
