@@ -9,6 +9,7 @@ from aiocfscrape import CloudflareScraper
 from aiohttp_proxy import ProxyConnector
 from better_proxy import Proxy
 from pyrogram import Client
+from random import choice
 from pyrogram.errors import Unauthorized, UserDeactivated, AuthKeyUnregistered
 from pyrogram.raw import types
 from pyrogram.raw.functions.messages import RequestAppWebView
@@ -358,7 +359,7 @@ class Tapper:
             3: "fewgm"
         }
         try:
-            response = await http_client.get(f'https://api.notcoin.tg/profiles/by/telegram_id/{self.tg_client.id}')
+            response = await http_client.get(f'https://api.notcoin.tg/profiles/by/telegram_id/{self.tg_client.me.id}')
             response.raise_for_status()
             x_auth_token = response.headers.get('X-Auth-Token')
 
@@ -459,7 +460,7 @@ class Tapper:
                 if current_round is None:
                     if card_number is not None:
                         await self.way_vote(http_client=http_client, card_number=card_number)
-                        logger.info(f"{self.session_name} | Проголосовали за карту: <m>{card}</m> | Потрачено костей: <m>{spend_bones}</m>")
+                        logger.info(f"{self.session_name} | Проголосовали за карту: <m>{card_number}</m>")
                 else:
                     if isinstance(current_round, dict) and 'selectedRoundCardValue' in current_round and 'spentGameDogsCount' in current_round:
                         card = current_round['selectedRoundCardValue']
@@ -516,13 +517,6 @@ class Tapper:
 
 tapper_instances = {}
 
-
-
-async def vote_card_for_tapper_by_name(session_name: str, card_number: int):
-    tapper = tapper_instances.get(session_name)
-    await tapper.handle_telegram_command(card_number)
-
-
 async def run_tapper(tg_client: Client, proxy: str | None):
     try:
         tapper = Tapper(tg_client=tg_client, proxy=proxy)
@@ -533,10 +527,26 @@ async def run_tapper(tg_client: Client, proxy: str | None):
         if tg_client.name in tapper_instances:
             del tapper_instances[tg_client.name]
 
-async def vote_card_for_all_tappers(card_number: int):
+async def vote_card_for_all_tappers(card_input: str):
     tasks = []
     for tapper in tapper_instances.values():
-        task = asyncio.create_task(tapper.handle_telegram_command(card_number))
+        task = asyncio.create_task(tapper.handle_telegram_command(choose_card(card_input)))
         tasks.append(task)
     
     await asyncio.gather(*tasks)
+
+async def vote_card_for_tapper_by_name(session_name: str, card_input: str):
+    tapper = tapper_instances.get(session_name)
+    if tapper:
+        await tapper.handle_telegram_command(choose_card(card_input))
+    else:
+        logger.error(f"Сессия {session_name} не найдена")
+
+def choose_card(card_input: str) -> int:
+    if ',' in card_input:
+        options = [int(card.strip()) for card in card_input.split(',')]
+        return choice(options)
+    elif card_input == '0':
+        return randint(1, 3)
+    else:
+        return int(card_input)
