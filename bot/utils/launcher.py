@@ -101,7 +101,7 @@ async def process() -> None:
         await register_sessions()
     elif action == 1:
         tg_clients = await get_tg_clients()
-        asyncio.create_task(run_bot(settings.BOT_TOKEN))
+        asyncio.create_task(run_bot())
         await run_tasks(tg_clients=tg_clients)
 
 

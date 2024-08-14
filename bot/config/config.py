@@ -7,8 +7,8 @@ class Settings(BaseSettings):
     API_ID: int
     API_HASH: str
     
-    BOT_TOKEN: str
-    ADMIN_UID: int
+    BOT_TOKEN: str = None
+    ADMIN_UID: int = 0
     
     RANDOM_CARD: bool = False
     AUTO_TASK: bool = True

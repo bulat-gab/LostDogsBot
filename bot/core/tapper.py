@@ -350,6 +350,34 @@ class Tapper:
         except Exception as error:
             logger.error(f"{self.session_name} | Неизвестная ошибка при сохранении игрового события: {error}")
             await asyncio.sleep(delay=3)
+            
+    async def join_squad(self, http_client: aiohttp.ClientSession, card_number: int):
+        squad_options = {
+            1: "whogm",
+            2: "hadgm",
+            3: "fewgm"
+        }
+        try:
+            response = await http_client.get(f'https://api.notcoin.tg/profiles/by/telegram_id/{self.tg_client.id}')
+            response.raise_for_status()
+            x_auth_token = response.headers.get('X-Auth-Token')
+
+            if not x_auth_token:
+                logger.error(f"{self.session_name} | Не удалось получить X-Auth-Token")
+                return
+
+            squad = squad_options.get(card_number, "whogm")
+            headers = {'X-Auth-Token': x_auth_token}
+            join_response = await http_client.get(f'https://api.notcoin.tg/squads/{squad}/join', headers=headers)
+            join_response.raise_for_status()
+
+            if join_response.status == 200:
+                logger.success(f"{self.session_name} | Успешно присоединились к отряду {squad}")
+            else:
+                logger.warning(f"{self.session_name} | Не удалось присоединиться к отряду {squad}. Статус: {join_response.status}")
+
+        except Exception as error:
+            logger.error(f"{self.session_name} | Ошибка при присоединении к отряду: {error}")
 
     async def way_vote(self, http_client: aiohttp.ClientSession, card_number: int = None):
         try:
@@ -357,6 +385,7 @@ class Tapper:
                     "mainScreenVote": True,
                     "timeMs": int(time() * 1000)
                 }
+            await self.join_squad(http_client=http_client, card_number=card_number) # Вступаем в сквад
             await self.save_game_event(http_client, event_data, event_name="MainScreen Vote")
             await asyncio.sleep(delay=randint(1, 3))
             
@@ -406,10 +435,15 @@ class Tapper:
                     f"{self.session_name} | Баланс: Кости = <m>{bones_balance}</m>; $WOOF = <m>{woof_balance}</m>")
                 prev_round_data = user_info['data']['lostDogsWayUserInfo']['prevRoundVote']
                 if prev_round_data:
+                    
                     logger.info(f"{self.session_name} | Предыдущий раунд завершен | Получение наград за прогноз...")
+                    # squad = user_info['data']['lostDogsWayUserInfo']['squad']
+                    # squad_name = squad.get("name", 'Неизвестный клан')
+                    # logger.info(f"{self.session_name} | Вы были в клане <m>{squad_name}</m>") 
                     prize = round(int(prev_round_data['woofPrize']) / 1000000000, 2)
                     if prev_round_data['userStatus'] == 'winner':
                         not_prize = round(int(prev_round_data['notPrize']) / 1000000000, 2)
+                        
                         logger.success(f"{self.session_name} | Успешное предсказание карты! | "
                                         f"Вы получили <m>{prize}</m> $WOOF и <m>{not_prize}</m> $NOT")
                     elif prev_round_data['userStatus'] == 'loser':
@@ -419,13 +453,13 @@ class Tapper:
                     await asyncio.sleep(delay=2)
 
                 await self.processing_tasks(http_client=http_client)
-                await asyncio.sleep(delay=randint(5, 10))
-
+                await asyncio.sleep(delay=randint(5, 10))               
+                
                 current_round = user_info['data']['lostDogsWayUserInfo'].get('currentRoundVote')
                 if current_round is None:
-                    logger.info(f"{self.session_name} | Текущий раунд не найден, пробуем голосовать")
                     if card_number is not None:
                         await self.way_vote(http_client=http_client, card_number=card_number)
+                        logger.info(f"{self.session_name} | Проголосовали за карту: <m>{card}</m> | Потрачено костей: <m>{spend_bones}</m>")
                 else:
                     if isinstance(current_round, dict) and 'selectedRoundCardValue' in current_round and 'spentGameDogsCount' in current_round:
                         card = current_round['selectedRoundCardValue']
@@ -456,6 +490,7 @@ class Tapper:
         except Exception as error:
             logger.error(f"{self.session_name} | Неизвестная ошибка: {error}")
             await asyncio.sleep(delay=randint(60, 120))
+        return access_token_created_time, token_live_time
     
     async def run(self) -> None:
         access_token_created_time = 0
@@ -480,6 +515,13 @@ class Tapper:
         await self.run_bot_cycle(http_client, access_token_created_time, token_live_time, card_number)
 
 tapper_instances = {}
+
+
+
+async def vote_card_for_tapper_by_name(session_name: str, card_number: int):
+    tapper = tapper_instances.get(session_name)
+    await tapper.handle_telegram_command(card_number)
+
 
 async def run_tapper(tg_client: Client, proxy: str | None):
     try:
