@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     SLEEP_TIME: list[int] = [1800, 3600]
     USE_RANDOM_DELAY_IN_RUN: bool = False
     RANDOM_DELAY_IN_RUN: list[int] = [0, 15]
+    FAKE_USERAGENT: bool = False
 
     USE_PROXY_FROM_FILE: bool = False
 
