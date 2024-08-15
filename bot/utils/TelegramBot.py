@@ -13,6 +13,12 @@ class TelegramBot:
         self.dp.message(Command("vote"))(self.vote_handler)
         self.dp.message(Command("list_tappers"))(self.list_tappers_handler)
         self.dp.message(Command("vote_tapper"))(self.vote_tapper_handler)
+        await self.bot.set_my_commands([
+            types.BotCommand(command="vote", description="Проголосовать всем сессиям"),
+            types.BotCommand(command="list_tappers", description="Вывести список активных сессий"),
+            types.BotCommand(command="vote_tapper", description="Проголосовать опред.сессии"),
+        ])
+        
         await self.dp.start_polling(self.bot)
 
     async def start_handler(self, message: types.Message):
@@ -51,7 +57,8 @@ class TelegramBot:
             return
         
         tapper_list = "\n".join(tapper_instances.keys())
-        await message.reply(f"Список активных тапперов:\n{tapper_list}")
+        cleaned_list = tapper_list.encode('utf-8', errors='ignore').decode('utf-8')
+        await message.reply(f"Список активных тапперов:\n{cleaned_list}")
 
 async def run_bot():
     if settings.BOT_TOKEN is None and settings.ADMIN_UID is None:
