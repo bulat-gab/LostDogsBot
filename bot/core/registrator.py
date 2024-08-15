@@ -20,7 +20,8 @@ async def register_sessions() -> None:
         name=session_name,
         api_id=API_ID,
         api_hash=API_HASH,
-        workdir="sessions/"
+        workdir="sessions/",
+        lang_code='ru'
     )
 
     async with session:

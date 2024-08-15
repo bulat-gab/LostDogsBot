@@ -30,6 +30,7 @@ class Tapper:
         self.tg_client_id = 0
         self.session_name = tg_client.name
         self.proxy = proxy
+        self._gameState = None
 
     async def get_tg_web_data(self, proxy: str | None) -> str:
         if proxy:
@@ -423,7 +424,14 @@ class Tapper:
         except Exception as error:
             logger.error(f"{self.session_name} | Неизвестная ошибка при голосовании: {error}")
             await asyncio.sleep(delay=3)
-
+            
+    async def safe_gameState(self, gameState):
+        self._gameState = gameState
+        
+        
+    async def get_gameState(self):
+        return self._gameState
+    
     
     async def run_bot_cycle(self, http_client, access_token_created_time, token_live_time, card_number: int = None):
         try:
@@ -477,6 +485,7 @@ class Tapper:
 
                 game_status = await self.get_game_status(http_client=http_client)
                 if game_status and 'gameState' in game_status:
+                    await self.safe_gameState(game_status['gameState'])
                     game_end_at = datetime.fromtimestamp(int(game_status['gameState'].get('gameEndsAt', 0)))
                     round_end_at = max(game_status['gameState'].get('roundEndsAt', 0) - time(), 0)
                     logger.info(
