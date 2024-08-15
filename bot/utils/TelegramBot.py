@@ -4,6 +4,7 @@ from datetime import datetime
 from time import time
 from bot.core.tapper import vote_card_for_all_tappers, vote_card_for_tapper_by_name, tapper_instances
 from bot.config import settings
+from bot.utils import logger
 
 class TelegramBot:
     def __init__(self, token: str):
@@ -91,8 +92,10 @@ class TelegramBot:
         await message.reply(f"📋 Список активных тапперов:\n{cleaned_list}")
 
 async def run_bot():
-    if settings.BOT_TOKEN is None and settings.ADMIN_UID is None:
+    if settings.BOT_TOKEN == "" or settings.ADMIN_UID == 0:
+        logger.error("Телеграм бот не был запущен, не указаны BOT_TOKEN и ADMIN_UID")
         return
     
     bot = TelegramBot(settings.BOT_TOKEN)
+    logger.success("Телеграм бот успешно запущен")
     await bot.start()

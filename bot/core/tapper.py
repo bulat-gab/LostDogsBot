@@ -433,68 +433,69 @@ class Tapper:
         return self._gameState
     
     
-    async def run_bot_cycle(self, http_client, access_token_created_time, token_live_time, card_number: int = None):
+    async def run_bot_cycle(self, http_client, card_number: int = None):
         try:
-            if time() - access_token_created_time >= token_live_time:
-                tg_web_data = await self.get_tg_web_data(proxy=self.proxy)
-                http_client.headers["X-Auth-Token"] = tg_web_data
-                user_info = await self.get_info_data(http_client=http_client)
-                access_token_created_time = time()
-                token_live_time = randint(3500, 3600)
-
-                bones_balance = user_info['data']['lostDogsWayUserInfo']['gameDogsBalance']
-                woof_balance = int(user_info['data']['lostDogsWayUserInfo']['woofBalance']) / 1000000000
-                logger.info(
-                    f"{self.session_name} | Баланс: Кости = <m>{bones_balance}</m>; $WOOF = <m>{woof_balance}</m>")
-                prev_round_data = user_info['data']['lostDogsWayUserInfo']['prevRoundVote']
-                if prev_round_data:
-                    
-                    logger.info(f"{self.session_name} | Предыдущий раунд завершен | Получение наград за прогноз...")
-                    # squad = user_info['data']['lostDogsWayUserInfo']['squad']
-                    # squad_name = squad.get("name", 'Неизвестный клан')
-                    # logger.info(f"{self.session_name} | Вы были в клане <m>{squad_name}</m>") 
-                    prize = round(int(prev_round_data['woofPrize']) / 1000000000, 2)
-                    if prev_round_data['userStatus'] == 'winner':
-                        not_prize = round(int(prev_round_data['notPrize']) / 1000000000, 2)
-                        
-                        logger.success(f"{self.session_name} | Успешное предсказание карты! | "
-                                        f"Вы получили <m>{prize}</m> $WOOF и <m>{not_prize}</m> $NOT")
-                    elif prev_round_data['userStatus'] == 'loser':
-                        logger.info(f"{self.session_name} | Неверное предсказание карты | Вы получили <m>{prize}</m> $WOOF")
-
-                    await self.view_prev_round(http_client=http_client)
-                    await asyncio.sleep(delay=2)
-
-                await self.processing_tasks(http_client=http_client)
-                await asyncio.sleep(delay=randint(5, 10))               
+            if settings.USE_RANDOM_DELAY_IN_RUN:
+                random_delay = randint(settings.RANDOM_DELAY_IN_RUN[0], settings.RANDOM_DELAY_IN_RUN[1])
+                logger.info(f"{self.session_name} |  Бот запустится через <lw>{random_delay}s</lw>")
+                await asyncio.sleep(delay=random_delay)
+            tg_web_data = await self.get_tg_web_data(proxy=self.proxy)
+            http_client.headers["X-Auth-Token"] = tg_web_data
+            user_info = await self.get_info_data(http_client=http_client)
+            
+            bones_balance = user_info['data']['lostDogsWayUserInfo']['gameDogsBalance']
+            woof_balance = int(user_info['data']['lostDogsWayUserInfo']['woofBalance']) / 1000000000
+            logger.info(
+                f"{self.session_name} | Баланс: Кости = <m>{bones_balance}</m>; $WOOF = <m>{woof_balance}</m>")
+            prev_round_data = user_info['data']['lostDogsWayUserInfo']['prevRoundVote']
+            if prev_round_data:
                 
-                current_round = user_info['data']['lostDogsWayUserInfo'].get('currentRoundVote')
-                if current_round is None:
-                    if card_number is not None:
-                        await self.way_vote(http_client=http_client, card_number=card_number)
-                        logger.info(f"{self.session_name} | Проголосовали за карту: <m>{card_number}</m>")
-                else:
-                    if isinstance(current_round, dict) and 'selectedRoundCardValue' in current_round and 'spentGameDogsCount' in current_round:
-                        card = current_round['selectedRoundCardValue']
-                        spend_bones = current_round['spentGameDogsCount']
-                        logger.info(
-                            f"{self.session_name} | Проголосовали за карту: <m>{card}</m> | Потрачено костей: <m>{spend_bones}</m>"
-                        )
-                    else:
-                        logger.warning(f"{self.session_name} | Некорректные данные текущего раунда: {current_round}")
+                logger.info(f"{self.session_name} | Предыдущий раунд завершен | Получение наград за прогноз...")
+                # squad = user_info['data']['lostDogsWayUserInfo']['squad']
+                # squad_name = squad.get("name", 'Неизвестный клан')
+                # logger.info(f"{self.session_name} | Вы были в клане <m>{squad_name}</m>") 
+                prize = round(int(prev_round_data['woofPrize']) / 1000000000, 2)
+                if prev_round_data['userStatus'] == 'winner':
+                    not_prize = round(int(prev_round_data['notPrize']) / 1000000000, 2)
+                    
+                    logger.success(f"{self.session_name} | Успешное предсказание карты! | "
+                                    f"Вы получили <m>{prize}</m> $WOOF и <m>{not_prize}</m> $NOT")
+                elif prev_round_data['userStatus'] == 'loser':
+                    logger.info(f"{self.session_name} | Неверное предсказание карты | Вы получили <m>{prize}</m> $WOOF")
 
-                game_status = await self.get_game_status(http_client=http_client)
-                if game_status and 'gameState' in game_status:
-                    await self.safe_gameState(game_status['gameState'])
-                    game_end_at = datetime.fromtimestamp(int(game_status['gameState'].get('gameEndsAt', 0)))
-                    round_end_at = max(game_status['gameState'].get('roundEndsAt', 0) - time(), 0)
+                await self.view_prev_round(http_client=http_client)
+                await asyncio.sleep(delay=2)
+
+            await self.processing_tasks(http_client=http_client)
+            await asyncio.sleep(delay=randint(5, 10))               
+            
+            current_round = user_info['data']['lostDogsWayUserInfo'].get('currentRoundVote')
+            if current_round is None:
+                if card_number is not None:
+                    await self.way_vote(http_client=http_client, card_number=card_number)
+                    logger.info(f"{self.session_name} | Проголосовали за карту: <m>{card_number}</m>")
+            else:
+                if isinstance(current_round, dict) and 'selectedRoundCardValue' in current_round and 'spentGameDogsCount' in current_round:
+                    card = current_round['selectedRoundCardValue']
+                    spend_bones = current_round['spentGameDogsCount']
                     logger.info(
-                        f"{self.session_name} | Текущий раунд заканчивается через: <m>{int(round_end_at / 60)}</m> мин | "
-                        f"Игра заканчивается: <m>{game_end_at}</m>")
+                        f"{self.session_name} | Проголосовали за карту: <m>{card}</m> | Потрачено костей: <m>{spend_bones}</m>"
+                    )
                 else:
-                    logger.warning(f"{self.session_name} | Не удалось получить статус игры")
+                    logger.warning(f"{self.session_name} | Некорректные данные текущего раунда: {current_round}")
 
-            sleep_time = randint(900, 1200)
+            game_status = await self.get_game_status(http_client=http_client)
+            if game_status and 'gameState' in game_status:
+                await self.safe_gameState(game_status['gameState'])
+                game_end_at = datetime.fromtimestamp(int(game_status['gameState'].get('gameEndsAt', 0)))
+                round_end_at = max(game_status['gameState'].get('roundEndsAt', 0) - time(), 0)
+                logger.info(
+                    f"{self.session_name} | Текущий раунд заканчивается через: <m>{int(round_end_at / 60)}</m> мин | "
+                    f"Игра заканчивается: <m>{game_end_at}</m>")
+            else:
+                logger.warning(f"{self.session_name} | Не удалось получить статус игры")
+                
+            sleep_time = randint(settings.SLEEP_TIME[0], settings.SLEEP_TIME[1])
             logger.info(f"{self.session_name} | Сон <m>{sleep_time}</m> секунд")
             await asyncio.sleep(delay=sleep_time)
 
@@ -504,29 +505,33 @@ class Tapper:
         except Exception as error:
             logger.error(f"{self.session_name} | Неизвестная ошибка: {error}")
             await asyncio.sleep(delay=randint(60, 120))
-        return access_token_created_time, token_live_time
     
     async def run(self) -> None:
-        access_token_created_time = 0
         proxy_conn = ProxyConnector().from_url(self.proxy) if self.proxy else None
 
-        headers["User-Agent"] = generate_random_user_agent(device_type='android', browser_type='chrome')
         http_client = CloudflareScraper(headers=headers, connector=proxy_conn)
-
+        
+        if settings.FAKE_USERAGENT:
+            http_client.headers["User-Agent"] = generate_random_user_agent(device_type='android', browser_type='chrome')
+        
         if self.proxy:
             await self.check_proxy(http_client=http_client, proxy=self.proxy)
-
-        token_live_time = randint(3500, 3600)
+            
         while True:
-            access_token_created_time, token_live_time = await self.run_bot_cycle(
-                http_client, access_token_created_time, token_live_time, randint(1, 3) if settings.RANDOM_CARD else None)
+            await self.run_bot_cycle(http_client, randint(1, 3) if settings.RANDOM_CARD else None)
     
     async def handle_telegram_command(self, card_number):
-        access_token_created_time = 0
-        token_live_time = randint(3500, 3600)
         proxy_conn = ProxyConnector().from_url(self.proxy) if self.proxy else None
+        
         http_client = CloudflareScraper(headers=headers, connector=proxy_conn)
-        await self.run_bot_cycle(http_client, access_token_created_time, token_live_time, card_number)
+        
+        if settings.FAKE_USERAGENT:
+            http_client.headers["User-Agent"] = generate_random_user_agent(device_type='android', browser_type='chrome')
+        
+        if self.proxy:
+            await self.check_proxy(http_client=http_client, proxy=self.proxy)
+        
+        await self.run_bot_cycle(http_client, card_number)
 
 tapper_instances = {}
 
