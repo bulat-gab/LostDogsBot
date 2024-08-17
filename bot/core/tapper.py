@@ -468,7 +468,7 @@ class Tapper:
             if current_round is None:
                 if card_number is not None:
                     await self.way_vote(http_client=http_client, card_number=card_number)
-                    logger.info(localization.get_message('tapper', 'vote_card').format(self.session_name, card))
+                    logger.info(localization.get_message('tapper', 'vote_card').format(self.session_name, card_number))
             else:
                 if isinstance(current_round, dict) and 'selectedRoundCardValue' in current_round and 'spentGameDogsCount' in current_round:
                     card = current_round['selectedRoundCardValue']
@@ -483,8 +483,6 @@ class Tapper:
                 game_end_at = datetime.fromtimestamp(int(game_status['gameState'].get('gameEndsAt', 0)))
                 round_end_at = max(game_status['gameState'].get('roundEndsAt', 0) - time(), 0)
                 logger.info(localization.get_message('tapper', 'game_status').format(self.session_name, int(round_end_at / 60), game_end_at))
-            else:
-                logger.warning(localization.get_message('tapper', 'game_status_error').format(self.session_name))
                 
             sleep_time = randint(settings.SLEEP_TIME[0], settings.SLEEP_TIME[1])
             logger.info(localization.get_message('tapper', 'sleep_info').format(self.session_name, sleep_time))
