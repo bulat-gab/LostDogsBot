@@ -54,9 +54,8 @@ class Tapper:
 
                 except (Unauthorized, UserDeactivated, AuthKeyUnregistered):
                     raise InvalidSession(self.session_name)
-
+                
             peer = await self.tg_client.resolve_peer('lost_dogs_bot')
-
             web_view = await self.tg_client.invoke(RequestAppWebView(
                 peer=peer,
                 platform='android',

@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     
     RANDOM_CARD: bool = False
     AUTO_TASK: bool = True
+    FAKE_USERAGENT: bool = True
     
     SLEEP_TIME: list[int] = [1800, 3600]
     USE_RANDOM_DELAY_IN_RUN: bool = False
