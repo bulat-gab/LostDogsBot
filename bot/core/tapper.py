@@ -14,7 +14,7 @@ from pyrogram.errors import Unauthorized, UserDeactivated, AuthKeyUnregistered
 from pyrogram.raw import types
 from pyrogram.raw.functions.messages import RequestAppWebView
 from bot.core.agents import generate_random_user_agent
-from bot.config import settings
+from bot.config.config import settings, localization
 
 from bot.utils import logger
 from bot.exceptions import InvalidSession
@@ -94,7 +94,7 @@ class Tapper:
             raise error
 
         except Exception as error:
-            logger.error(f"{self.session_name} | Неизвестная ошибка при авторизации: {error}")
+            logger.error(localization.get_message('tapper', 'unknown_error').format(self.session_name, error))
             await asyncio.sleep(delay=3)
 
     async def get_info_data(self, http_client: aiohttp.ClientSession):
@@ -114,12 +114,11 @@ class Tapper:
                 if error == "User not found":
                     register_response = await self.register_user(http_client=http_client)
                     if register_response:
-                        logger.success(f"{self.session_name} | Пользователь <m>{register_response['nickname']}</m> "
-                                       f"успешно зарегистрирован! | ID пользователя: <m>{register_response['id']}</m> ")
+                        logger.success(localization.get_message('tapper', 'user_registered').format(self.session_name, register_response['nickname'], register_response['id']))
                         return await self.get_info_data(http_client=http_client)
 
                 else:
-                    logger.error(f"{self.session_name} | Ошибка в ответе от сервера: {error}")
+                    logger.error(localization.get_message('tapper', 'server_error').format(self.session_name, error))
                     await asyncio.sleep(delay=randint(3, 7))
 
             json_data = {
@@ -131,16 +130,16 @@ class Tapper:
             return response_json
 
         except Exception as error:
-            logger.error(f"{self.session_name} | Неизвестная ошибка при получении информации о пользователе: {error}")
+            logger.error(localization.get_message('tapper', 'user_info_error').format(self.session_name, error))
             await asyncio.sleep(delay=randint(3, 7))
 
     async def check_proxy(self, http_client: aiohttp.ClientSession, proxy: Proxy) -> None:
         try:
             response = await http_client.get(url='https://httpbin.org/ip', timeout=aiohttp.ClientTimeout(5))
             ip = (await response.json()).get('origin')
-            logger.info(f"{self.session_name} | IP прокси: {ip}")
+            logger.info(localization.get_message('tapper', 'proxy_check').format(self.session_name, ip))
         except Exception as error:
-            logger.error(f"{self.session_name} | Прокси: {proxy} | Ошибка: {error}")
+            logger.error(localization.get_message('tapper', 'proxy_error').format(self.session_name, proxy, error))
 
     async def register_user(self, http_client: aiohttp.ClientSession):
         try:
@@ -160,7 +159,7 @@ class Tapper:
             response_json = await response.json()
             return response_json['data']['lostDogsWayGenerateWallet']['user']
         except Exception as error:
-            logger.error(f"{self.session_name} | Неизвестная ошибка при регистрации пользователя: {error}")
+            logger.error(localization.get_message('tapper', 'user_registration_error').format(self.session_name, error))
             await asyncio.sleep(delay=3)
 
     async def get_personal_tasks(self, http_client: aiohttp.ClientSession):
@@ -172,7 +171,7 @@ class Tapper:
             response_json = await response.json()
             return response_json['data']['lostDogsWayWoofPersonalTasks']['items']
         except Exception as error:
-            logger.error(f"{self.session_name} | Неизвестная ошибка при получении персональных заданий: {error}")
+            logger.error(localization.get_message('tapper', 'personal_tasks_error').format(self.session_name, error))
             await asyncio.sleep(delay=3)
 
     async def get_common_tasks(self, http_client: aiohttp.ClientSession):
@@ -184,7 +183,7 @@ class Tapper:
             response_json = await response.json()
             return response_json['data']['lostDogsWayCommonTasks']['items']
         except Exception as error:
-            logger.error(f"{self.session_name} | Неизвестная ошибка при получении общих заданий: {error}")
+            logger.error(localization.get_message('tapper', 'common_tasks_error').format(self.session_name, error))
             await asyncio.sleep(delay=3)
 
     async def processing_tasks(self, http_client: aiohttp.ClientSession):
@@ -197,15 +196,16 @@ class Tapper:
             }
             await self.save_game_event(http_client=http_client, data=event_data, event_name="Common Page View")
             for task in personal_tasks:
-                if not task['isCompleted'] and task['id'] != 'connectWallet' and task['id'] != 'joinSquad':
+                if not task['isCompleted'] and task['id'] != 'connectWallet' and task['id'] != 'joinSquad' and task['id'] != 'connectWallet':
                     await asyncio.sleep(delay=randint(5, 10))
-                    logger.info(f"{self.session_name} | Выполнение персонального задания <m>{task['name']}</m>...")
+                    logger.info(localization.get_message('tapper', 'processing_tasks').format(self.session_name, task['name']))
                     response_data = await self.perform_task(http_client=http_client, task_id=task['id'])
                     if response_data and response_data['success']:
-                        logger.success(f"{self.session_name} | Задание <m>{response_data['task']['name']}</m> выполнено! | "
-                                       f"Награда: <m>+{int(response_data['woofReward']) / 1000000000}</m> $WOOF")
+                        woof_reward = response_data.get('woofReward', 0)
+                        reward_amount = int(woof_reward) / 1000000000 if woof_reward else 0
+                        logger.success(localization.get_message('tapper', 'task_completed').format(self.session_name, response_data['task']['name'], reward_amount))
                     else:
-                        logger.info(f"{self.session_name} | Не удалось выполнить задание <m>{task['context']['name']}</m>")
+                        logger.info(localization.get_message('tapper', 'task_failed').format(self.session_name, task['context']['name']))
 
             await asyncio.sleep(delay=2)
             common_tasks = await self.get_common_tasks(http_client=http_client)
@@ -213,16 +213,17 @@ class Tapper:
             for task in common_tasks:
                 if task['id'] not in done_tasks and task.get('customCheckStrategy') is None:
                     await asyncio.sleep(delay=randint(5, 10))
-                    logger.info(f"{self.session_name} | Выполнение общего задания <m>{task['name']}</m>...")
+                    logger.info(localization.get_message('tapper', 'processing_tasks').format(self.session_name, task['name']))
                     response_data = await self.perform_common_task(http_client=http_client, task_id=task['id'])
                     if response_data and response_data['success']:
-                        logger.success(f"{self.session_name} | Задание <m>{response_data['task']['name']}</m> выполнено! | "
-                                       f"Награда: <m>+{int(response_data['task']['woofReward']) / 1000000000}</m> $WOOF")
+                        woof_reward = response_data.get('woofReward', 0)
+                        reward_amount = int(woof_reward) / 1000000000 if woof_reward else 0
+                        logger.success(localization.get_message('tapper', 'task_completed').format(self.session_name, response_data['task']['name'], reward_amount))
                     else:
-                        logger.info(f"{self.session_name} | Не удалось выполнить задание <m>{task['context']['name']}</m>")
+                        logger.info(localization.get_message('tapper', 'task_failed').format(self.session_name, task['context']['name']))
 
         except Exception as error:
-            logger.error(f"{self.session_name} | Неизвестная ошибка при выполнении заданий: {error}")
+            logger.error(localization.get_message('tapper', 'tasks_processing_error').format(self.session_name, error))
             await asyncio.sleep(delay=3)
 
     async def perform_task(self, http_client: aiohttp.ClientSession, task_id: str):
@@ -245,8 +246,8 @@ class Tapper:
             response_json = await response.json()
             return response_json['data']['lostDogsWayCompleteTask']
 
-        except Exception as e:
-            logger.error(f"{self.session_name} | Неизвестная ошибка при проверке персонального задания {task_id} | Ошибка: {e}")
+        except Exception as error:
+            logger.error(localization.get_message('tapper', 'task_check_error').format(self.session_name, task_id, error))
 
     async def perform_common_task(self, http_client: aiohttp.ClientSession, task_id: str):
         try:
@@ -280,8 +281,8 @@ class Tapper:
 
             return response_json['data']['lostDogsWayCompleteCommonTask']
 
-        except Exception as e:
-            logger.error(f"{self.session_name} | Неизвестная ошибка при проверке общего задания {task_id} | Ошибка: {e}")
+        except Exception as error:
+            logger.error(localization.get_message('tapper', 'common_task_check_error').format(self.session_name, task_id, error))
 
     async def get_done_common_tasks(self, http_client: aiohttp.ClientSession):
         try:
@@ -292,7 +293,7 @@ class Tapper:
             response_json = await response.json()
             return response_json['data']['lostDogsWayUserCommonTasksDone']
         except Exception as error:
-            logger.error(f"{self.session_name} | Неизвестная ошибка при получении выполненных заданий: {error}")
+            logger.error(localization.get_message('tapper', 'done_tasks_error').format(self.session_name, error))
             await asyncio.sleep(delay=3)
 
     async def get_game_status(self, http_client: aiohttp.ClientSession):
@@ -303,7 +304,7 @@ class Tapper:
             response_json = await response.json()
             return response_json['data']['lostDogsWayGameStatus']
         except Exception as error:
-            logger.error(f"{self.session_name} | Неизвестная ошибка при получении статуса игры: {error}")
+            logger.error(localization.get_message('tapper', 'game_status_error').format(self.session_name, error))
             await asyncio.sleep(delay=3)
 
     async def view_prev_round(self, http_client: aiohttp.ClientSession):
@@ -322,7 +323,7 @@ class Tapper:
             response_json = await response.json()
             return response_json['data']['lostDogsWayViewPrevRound']
         except Exception as error:
-            logger.error(f"{self.session_name} | Неизвестная ошибка при получении статуса игры: {error}")
+            logger.error(localization.get_message('tapper', 'view_prev_round_error').format(self.session_name, error))
             await asyncio.sleep(delay=3)
 
     async def save_game_event(self, http_client: aiohttp.ClientSession, data: Any, event_name: str):
@@ -351,9 +352,9 @@ class Tapper:
             response = await http_client.post(f'https://api.getgems.io/graphql', json=json_data)
             response_json = await response.json()
             if not response_json['data']['lostDogsWaySaveEvent']:
-                logger.warning(f"{self.session_name} | Не удалось сохранить игровое событие: <m>{event_name}</m>")
+                logger.warning(localization.get_message('tapper', 'save_event_failed').format(self.session_name, event_name))
         except Exception as error:
-            logger.error(f"{self.session_name} | Неизвестная ошибка при сохранении игрового события: {error}")
+            logger.error(localization.get_message('tapper', 'save_event_error').format(self.session_name, error))
             await asyncio.sleep(delay=3)
             
     async def join_squad(self, http_client: aiohttp.ClientSession, card_number: int):
@@ -368,7 +369,7 @@ class Tapper:
             x_auth_token = response.headers.get('X-Auth-Token')
 
             if not x_auth_token:
-                logger.error(f"{self.session_name} | Не удалось получить X-Auth-Token")
+                logger.error(localization.get_message('tapper', 'x_auth_token_not_found'))
                 return
 
             squad = squad_options.get(card_number, "whogm")
@@ -377,12 +378,12 @@ class Tapper:
             join_response.raise_for_status()
 
             if join_response.status == 200:
-                logger.success(f"{self.session_name} | Успешно присоединились к отряду {squad}")
+                logger.success(localization.get_message('tapper', 'squad_join_success').format(self.session_name, squad))
             else:
-                logger.warning(f"{self.session_name} | Не удалось присоединиться к отряду {squad}. Статус: {join_response.status}")
+                logger.warning(localization.get_message('tapper', 'squad_join_fail').format(self.session_name, squad, join_response.status))
 
         except Exception as error:
-            logger.error(f"{self.session_name} | Ошибка при присоединении к отряду: {error}")
+            logger.error(localization.get_message('tapper', 'squad_join_error').format(self.session_name, error))
 
     async def way_vote(self, http_client: aiohttp.ClientSession, card_number: int = None):
         try:
@@ -414,14 +415,12 @@ class Tapper:
             response_data = response_json['data']['lostDogsWayVote']
             card = response_data['selectedRoundCardValue']
             spend_bones = response_data['spentGameDogsCount']
-
-            logger.success(f"{self.session_name} | Успешное голосование! | Выбранная карта: <m>{card}</m> | "
-                               f"Потрачено костей: <m>{spend_bones}</m> ")
+            logger.success(localization.get_message('tapper', 'vote_success').format(self.session_name, card, spend_bones))
 
             return response_data
 
         except Exception as error:
-            logger.error(f"{self.session_name} | Неизвестная ошибка при голосовании: {error}")
+            logger.warning(localization.get_message('tapper', 'vote_error').format(self.session_name,error))
             await asyncio.sleep(delay=3)
             
     async def safe_gameState(self, gameState):
@@ -436,7 +435,7 @@ class Tapper:
         try:
             if settings.USE_RANDOM_DELAY_IN_RUN:
                 random_delay = randint(settings.RANDOM_DELAY_IN_RUN[0], settings.RANDOM_DELAY_IN_RUN[1])
-                logger.info(f"{self.session_name} |  Бот запустится через <lw>{random_delay}s</lw>")
+                logger.info(localization.get_message('tapper', 'random_delay').format(self.session_name, random_delay))
                 await asyncio.sleep(delay=random_delay)
             tg_web_data = await self.get_tg_web_data(proxy=self.proxy)
             http_client.headers["X-Auth-Token"] = tg_web_data
@@ -444,23 +443,20 @@ class Tapper:
             
             bones_balance = user_info['data']['lostDogsWayUserInfo']['gameDogsBalance']
             woof_balance = int(user_info['data']['lostDogsWayUserInfo']['woofBalance']) / 1000000000
-            logger.info(
-                f"{self.session_name} | Баланс: Кости = <m>{bones_balance}</m>; $WOOF = <m>{woof_balance}</m>")
+            logger.info(localization.get_message('tapper', 'balance_info').format(self.session_name, bones_balance, woof_balance))
             prev_round_data = user_info['data']['lostDogsWayUserInfo']['prevRoundVote']
             if prev_round_data:
                 
-                logger.info(f"{self.session_name} | Предыдущий раунд завершен | Получение наград за прогноз...")
+                logger.info(localization.get_message('tapper', 'previous_round_completed').format(self.session_name))
                 # squad = user_info['data']['lostDogsWayUserInfo']['squad']
                 # squad_name = squad.get("name", 'Неизвестный клан')
                 # logger.info(f"{self.session_name} | Вы были в клане <m>{squad_name}</m>") 
                 prize = round(int(prev_round_data['woofPrize']) / 1000000000, 2)
                 if prev_round_data['userStatus'] == 'winner':
                     not_prize = round(int(prev_round_data['notPrize']) / 1000000000, 2)
-                    
-                    logger.success(f"{self.session_name} | Успешное предсказание карты! | "
-                                    f"Вы получили <m>{prize}</m> $WOOF и <m>{not_prize}</m> $NOT")
+                    logger.success(localization.get_message('tapper', 'successful_prediction').format(self.session_name, prize, not_prize))
                 elif prev_round_data['userStatus'] == 'loser':
-                    logger.info(f"{self.session_name} | Неверное предсказание карты | Вы получили <m>{prize}</m> $WOOF")
+                    logger.info(localization.get_message('tapper', 'incorrect_prediction').format(self.session_name, prize))
 
                 await self.view_prev_round(http_client=http_client)
                 await asyncio.sleep(delay=2)
@@ -472,37 +468,33 @@ class Tapper:
             if current_round is None:
                 if card_number is not None:
                     await self.way_vote(http_client=http_client, card_number=card_number)
-                    logger.info(f"{self.session_name} | Проголосовали за карту: <m>{card_number}</m>")
+                    logger.info(localization.get_message('tapper', 'vote_card').format(self.session_name, card))
             else:
                 if isinstance(current_round, dict) and 'selectedRoundCardValue' in current_round and 'spentGameDogsCount' in current_round:
                     card = current_round['selectedRoundCardValue']
                     spend_bones = current_round['spentGameDogsCount']
-                    logger.info(
-                        f"{self.session_name} | Проголосовали за карту: <m>{card}</m> | Потрачено костей: <m>{spend_bones}</m>"
-                    )
+                    logger.info(localization.get_message('tapper', 'vote_success').format(self.session_name, card, spend_bones))
                 else:
-                    logger.warning(f"{self.session_name} | Некорректные данные текущего раунда: {current_round}")
+                    logger.warning(localization.get_message('tapper', 'invalid_round_data').format(self.session_name, current_round))
 
             game_status = await self.get_game_status(http_client=http_client)
             if game_status and 'gameState' in game_status:
                 await self.safe_gameState(game_status['gameState'])
                 game_end_at = datetime.fromtimestamp(int(game_status['gameState'].get('gameEndsAt', 0)))
                 round_end_at = max(game_status['gameState'].get('roundEndsAt', 0) - time(), 0)
-                logger.info(
-                    f"{self.session_name} | Текущий раунд заканчивается через: <m>{int(round_end_at / 60)}</m> мин | "
-                    f"Игра заканчивается: <m>{game_end_at}</m>")
+                logger.info(localization.get_message('tapper', 'game_status').format(self.session_name, int(round_end_at / 60), game_end_at))
             else:
-                logger.warning(f"{self.session_name} | Не удалось получить статус игры")
+                logger.warning(localization.get_message('tapper', 'game_status_error').format(self.session_name))
                 
             sleep_time = randint(settings.SLEEP_TIME[0], settings.SLEEP_TIME[1])
-            logger.info(f"{self.session_name} | Сон <m>{sleep_time}</m> секунд")
+            logger.info(localization.get_message('tapper', 'sleep_info').format(self.session_name, sleep_time))
             await asyncio.sleep(delay=sleep_time)
 
         except InvalidSession as error:
             raise error
 
         except Exception as error:
-            logger.error(f"{self.session_name} | Неизвестная ошибка: {error}")
+            logger.error(localization.get_message('tapper', 'unknown_error').format(self.session_name, error))
             await asyncio.sleep(delay=randint(60, 120))
     
     async def run(self) -> None:
@@ -540,7 +532,7 @@ async def run_tapper(tg_client: Client, proxy: str | None):
         tapper_instances[tg_client.name] = tapper
         await tapper.run()
     except InvalidSession:
-        logger.error(f"{tg_client.name} | Недействительная сессия")
+        logger.error(localization.get_message('tapper', 'invalid_session').format(tg_client.name))
         if tg_client.name in tapper_instances:
             del tapper_instances[tg_client.name]
 
@@ -557,7 +549,7 @@ async def vote_card_for_tapper_by_name(session_name: str, card_input: str):
     if tapper:
         await tapper.handle_telegram_command(choose_card(card_input))
     else:
-        logger.error(f"Сессия {session_name} не найдена")
+        logger.error(localization.get_message('tapper', 'session_not_found').format(session_name))
 
 def choose_card(card_input: str) -> int:
     if ',' in card_input:

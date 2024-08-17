@@ -7,28 +7,12 @@ from itertools import cycle
 from pyrogram import Client
 from better_proxy import Proxy
 
-from bot.config import settings
+from bot.config.config import settings
+from bot.config.config import localization
 from bot.utils import logger
 from bot.utils.TelegramBot import run_bot
 from bot.core.tapper import run_tapper
 from bot.core.registrator import register_sessions
-
-
-start_text = """
-
- ▄▄▄     ▄▄▄▄▄▄▄ ▄▄▄▄▄▄▄ ▄▄▄▄▄▄▄ ▄▄▄▄▄▄  ▄▄▄▄▄▄▄ ▄▄▄▄▄▄▄ ▄▄▄▄▄▄▄ ▄▄▄▄▄▄▄ ▄▄▄▄▄▄▄ ▄▄▄▄▄▄▄ 
-█   █   █       █       █       █      ██       █       █       █  ▄    █       █       █
-█   █   █   ▄   █  ▄▄▄▄▄█▄     ▄█  ▄    █   ▄   █   ▄▄▄▄█  ▄▄▄▄▄█ █▄█   █   ▄   █▄     ▄█
-█   █   █  █ █  █ █▄▄▄▄▄  █   █ █ █ █   █  █ █  █  █  ▄▄█ █▄▄▄▄▄█       █  █ █  █ █   █  
-█   █▄▄▄█  █▄█  █▄▄▄▄▄  █ █   █ █ █▄█   █  █▄█  █  █ █  █▄▄▄▄▄  █  ▄   ██  █▄█  █ █   █  
-█       █       █▄▄▄▄▄█ █ █   █ █       █       █  █▄▄█ █▄▄▄▄▄█ █ █▄█   █       █ █   █  
-█▄▄▄▄▄▄▄█▄▄▄▄▄▄▄█▄▄▄▄▄▄▄█ █▄▄▄█ █▄▄▄▄▄▄██▄▄▄▄▄▄▄█▄▄▄▄▄▄▄█▄▄▄▄▄▄▄█▄▄▄▄▄▄▄█▄▄▄▄▄▄▄█ █▄▄▄█  
-                                                                                                                                           
-Выберите действие:
-
-    1. Запустить кликер
-    2. Создать сессию
-"""
 
 global tg_clients
 
@@ -40,7 +24,6 @@ def get_session_names() -> list[str]:
 
     return session_names
 
-
 def get_proxies() -> list[Proxy]:
     if settings.USE_PROXY_FROM_FILE:
         with open(file="bot/config/proxies.txt", encoding="utf-8-sig") as file:
@@ -50,17 +33,16 @@ def get_proxies() -> list[Proxy]:
 
     return proxies
 
-
 async def get_tg_clients() -> list[Client]:
     global tg_clients
 
     session_names = get_session_names()
 
     if not session_names:
-        raise FileNotFoundError("Не найдены файлы с сессиями")
+        raise FileNotFoundError(localization.get_message('launcher', 'no_sessions_found'))
 
     if not settings.API_ID or not settings.API_HASH:
-        raise ValueError("API_ID и API_HASH не заполнены в .env")
+        raise ValueError(localization.get_message('launcher', 'api_not_set'))
 
     tg_clients = [
         Client(
@@ -74,25 +56,23 @@ async def get_tg_clients() -> list[Client]:
 
     return tg_clients
 
-
 async def process() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("-a", "--action", type=int, help="Action to perform")
-
-    logger.info(f"Обнаружено {len(get_session_names())} сессий | {len(get_proxies())} прокси")
+    logger.info(localization.get_message('launcher', 'sessions_proxies_info').format(len(get_session_names()), len(get_proxies())))
 
     action = parser.parse_args().action
 
     if not action:
-        print(start_text)
+        print(localization.get_message('launcher', 'start_text'))
 
         while True:
-            action = input("> ")
+            action = input(localization.get_message('launcher', 'input_prompt'))
 
             if not action.isdigit():
-                logger.warning("Это должно быть числом")
+                logger.warning(localization.get_message('launcher', 'input_not_number'))
             elif action not in ["1", "2"]:
-                logger.warning(f"В списке вроде же было только 1 или 2, где ты взял {action}?!")
+                logger.warning(localization.get_message('launcher', 'invalid_action').format(action))
             else:
                 action = int(action)
                 break
@@ -103,7 +83,6 @@ async def process() -> None:
         tg_clients = await get_tg_clients()
         asyncio.create_task(run_bot())
         await run_tasks(tg_clients=tg_clients)
-
 
 async def run_tasks(tg_clients: list[Client]):
     proxies = get_proxies()

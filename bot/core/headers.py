@@ -1,6 +1,8 @@
+from bot.config import settings
+
 headers = {
     'Accept': 'application/json',
-    'Accept-Language': 'en-US,en;q=0.9',
+    'Accept-Language': f'{settings.LANGUAGE_CODE},{settings.LANGUAGE_CODE};q=0.9,en-US;q=0.8,en;q=0.7',
     'Content-Type': 'application/json',
     'Connection': 'keep-alive',
     'Origin': 'https://dog-ways.newcoolproject.io',
@@ -13,5 +15,5 @@ headers = {
     'Sec-Ch-Ua-platform': '"Android"',
     'User-Agent': 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.6422.165 Mobile Safari/537.36',
     'X-Auth-Token': '',
-    'X-Gg-Client': 'v:1 l:en'
+    'X-Gg-Client': f'v:1 l:{settings.LANGUAGE_CODE}'
 }
