@@ -5,7 +5,7 @@ from aiogram.types import InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import asyncio
 from time import time
-from bot.core.tapper import vote_card_for_all_tappers, vote_card_for_tapper_by_name, tapper_instances
+from bot.core.tapper import vote_card_for_all_tappers, vote_card_for_tapper_by_name, tapper_instances, get_global_gameState
 from bot.config.config import settings, localization
 from bot.utils import logger
 
@@ -158,11 +158,7 @@ class TelegramBot:
         await callback_query.message.edit_text(localization.get_message('telegram_bot', 'tapper_list').format(cleaned_list), reply_markup=keyboard.as_markup())
 
 async def getGameState():
-    tapper = list(tapper_instances.values())[-1]
-    gameState = await tapper.get_gameState()
-    if gameState is None:
-        return None
-    return gameState
+    return get_global_gameState()
 
 async def run_bot():
     if settings.BOT_TOKEN == "" or settings.ADMIN_UID == 0:

@@ -5,11 +5,13 @@ from typing import Any
 from urllib.parse import unquote, quote
 
 import aiohttp
+import json
 from aiocfscrape import CloudflareScraper
 from aiohttp_proxy import ProxyConnector
 from better_proxy import Proxy
 from pyrogram import Client
 from random import choice
+from copy import deepcopy
 from pyrogram.errors import Unauthorized, UserDeactivated, AuthKeyUnregistered
 from pyrogram.raw import types
 from pyrogram.raw.functions.messages import RequestAppWebView
@@ -18,11 +20,22 @@ from bot.config.config import settings, localization
 
 from bot.utils import logger
 from bot.exceptions import InvalidSession
-from .headers import headers
+from bot.core.headers import headers
+from bot.core.headers_notcoin import headers_notcoin
 
 from random import randint
 
 tapper_instances = {}
+
+_global_gameState = None
+
+def get_global_gameState():
+    global _global_gameState
+    return _global_gameState
+
+def set_global_gameState(new_state):
+    global _global_gameState
+    _global_gameState = new_state
 
 class Tapper:
     def __init__(self, tg_client: Client, proxy: str):
@@ -30,7 +43,7 @@ class Tapper:
         self.tg_client_id = 0
         self.session_name = tg_client.name
         self.proxy = proxy
-        self._gameState = None
+        self.tg_web_data = None
 
     async def get_tg_web_data(self, proxy: str | None) -> str:
         if proxy:
@@ -96,30 +109,39 @@ class Tapper:
         except Exception as error:
             logger.error(localization.get_message('tapper', 'unknown_error').format(self.session_name, error))
             await asyncio.sleep(delay=3)
-
+            
     async def get_info_data(self, http_client: aiohttp.ClientSession):
+        global _global_gameState
+        url = ("https://api.getgems.io/graphql?operationName=getHomePage&variables=%7B%7D&extensions="
+            "%7B%22persistedQuery%22%3A%7B%22version%22%3A1%2C%22sha256Hash"
+            "%22%3A%22d89d3ccd8d9fd69d37d181e2e8303ee78b80e6a26e4500c42e6d9f695257f9be%22%7D%7D")
+        
         try:
-            url = ('https://api.getgems.io/graphql?operationName=lostDogsWayUserInfo&variables=%7B%7D&extensions='
-                   '%7B%22persistedQuery%22%3A%7B%22version%22%3A1%2C%22sha256Hash'
-                   '%22%3A%22a17a9e148547c1c0ab250cca329a3ca237d46b615365dbd217e32aa7c068d10f%22%7D%7D')
             await http_client.options(url=url)
-
             response = await http_client.get(url=url)
-            response.raise_for_status()
-
             response_json = await response.json()
 
-            if not response_json["data"]:
-                error = response_json["errors"][0]["message"]
-                if error == "User not found":
+            home_page_data = response_json.get('data', {})
+            game_status = home_page_data.get('lostDogsWayGameStatus', {})
+            user_info = home_page_data.get('lostDogsWayUserInfo', {})
+
+            if not user_info:
+                error = response_json.get("errors", [{}])[0].get("message")
+                if error == "User not found": # Нужно будет ещё посмотреть с новыми учётками, может он по другому теперь пишет
                     register_response = await self.register_user(http_client=http_client)
                     if register_response:
                         logger.success(localization.get_message('tapper', 'user_registered').format(self.session_name, register_response['nickname'], register_response['id']))
                         return await self.get_info_data(http_client=http_client)
-
                 else:
                     logger.error(localization.get_message('tapper', 'server_error').format(self.session_name, error))
                     await asyncio.sleep(delay=randint(3, 7))
+                    return None
+                
+            if game_status.get('gameState', None) is not None:
+                set_global_gameState(game_status['gameState'])
+            else:
+                logger.info(game_status)
+                logger.info(f"{self.session_name} | gameState is None")
 
             json_data = {
                 'launch': True,
@@ -127,12 +149,13 @@ class Tapper:
             }
             await self.save_game_event(http_client=http_client, data=json_data, event_name="Launch")
 
-            return response_json
+            return game_status, user_info
 
         except Exception as error:
             logger.error(localization.get_message('tapper', 'user_info_error').format(self.session_name, error))
             await asyncio.sleep(delay=randint(3, 7))
-
+            return None, None
+        
     async def check_proxy(self, http_client: aiohttp.ClientSession, proxy: Proxy) -> None:
         try:
             response = await http_client.get(url='https://httpbin.org/ip', timeout=aiohttp.ClientTimeout(5))
@@ -296,17 +319,6 @@ class Tapper:
             logger.error(localization.get_message('tapper', 'done_tasks_error').format(self.session_name, error))
             await asyncio.sleep(delay=3)
 
-    async def get_game_status(self, http_client: aiohttp.ClientSession):
-        try:
-            response = await http_client.get(f'https://api.getgems.io/graphql?operationName=lostDogsWayGameStatus&variables='
-                                             f'%7B%7D&extensions=%7B%22persistedQuery%22%3A%7B%22version%22%3A1%2C%22sha256Hash'
-                                             f'%22%3A%22f706c4cd57a87632bd4360b5458e65f854b07e690cf7f8b9f96567fe072148c1%22%7D%7D')
-            response_json = await response.json()
-            return response_json['data']['lostDogsWayGameStatus']
-        except Exception as error:
-            logger.error(localization.get_message('tapper', 'game_status_error').format(self.session_name, error))
-            await asyncio.sleep(delay=3)
-
     async def view_prev_round(self, http_client: aiohttp.ClientSession):
         try:
             json_data = {
@@ -357,26 +369,24 @@ class Tapper:
             logger.error(localization.get_message('tapper', 'save_event_error').format(self.session_name, error))
             await asyncio.sleep(delay=3)
             
-    async def join_squad(self, http_client: aiohttp.ClientSession, card_number: int):
+    async def join_squad(self, http_client: aiohttp.ClientSession, card_number: int):        
         squad_options = {
             1: "whogm",
             2: "hadgm",
             3: "fewgm"
         }
+        squad = squad_options.get(card_number, "whogm")
+        local_headers = deepcopy(headers_notcoin)
         try:
-            response = await http_client.get(f'https://api.notcoin.tg/profiles/by/telegram_id/{self.tg_client_id}')
-            response.raise_for_status()
-            x_auth_token = response.headers.get('X-Auth-Token')
-
-            if not x_auth_token:
-                logger.error(localization.get_message('tapper', 'x_auth_token_not_found'))
+            response = await http_client.post(f'https://api.notcoin.tg/auth/login', headers=local_headers, json={"webAppData": self.tg_web_data})
+            accessToken = json.loads(await response.text()).get("data", {}).get("accessToken", None)
+            if not accessToken:
+                logger.error(localization.get_message('tapper', 'x_auth_token_not_found').format(self.session_name))
                 return
-
-            squad = squad_options.get(card_number, "whogm")
-            headers = {'X-Auth-Token': x_auth_token}
-            join_response = await http_client.get(f'https://api.notcoin.tg/squads/{squad}/join', headers=headers)
-            join_response.raise_for_status()
-
+            
+            local_headers['X-Auth-Token'] = f'Bearer {accessToken}'
+            join_response = await http_client.get(f'https://api.notcoin.tg/squads/{squad}/join', headers=local_headers)
+            
             if join_response.status == 200:
                 logger.success(localization.get_message('tapper', 'squad_join_success').format(self.session_name, squad))
             else:
@@ -384,6 +394,7 @@ class Tapper:
 
         except Exception as error:
             logger.error(localization.get_message('tapper', 'squad_join_error').format(self.session_name, error))
+        
 
     async def way_vote(self, http_client: aiohttp.ClientSession, card_number: int = None):
         try:
@@ -392,6 +403,7 @@ class Tapper:
                     "timeMs": int(time() * 1000)
                 }
             #await self.join_squad(http_client=http_client, card_number=card_number) # Вступаем в сквад
+            #await asyncio.sleep(delay=3)
             await self.save_game_event(http_client, event_data, event_name="MainScreen Vote")
             await asyncio.sleep(delay=randint(1, 3))
             
@@ -423,12 +435,6 @@ class Tapper:
             logger.warning(localization.get_message('tapper', 'vote_error').format(self.session_name,error))
             await asyncio.sleep(delay=3)
             
-    async def safe_gameState(self, gameState):
-        self._gameState = gameState
-        
-        
-    async def get_gameState(self):
-        return self._gameState
     
     
     async def run_bot_cycle(self, http_client, card_number: int = None):
@@ -437,20 +443,25 @@ class Tapper:
                 random_delay = randint(settings.RANDOM_DELAY_IN_RUN[0], settings.RANDOM_DELAY_IN_RUN[1])
                 logger.info(localization.get_message('tapper', 'random_delay').format(self.session_name, random_delay))
                 await asyncio.sleep(delay=random_delay)
-            tg_web_data = await self.get_tg_web_data(proxy=self.proxy)
-            http_client.headers["X-Auth-Token"] = tg_web_data
-            user_info = await self.get_info_data(http_client=http_client)
+            self.tg_web_data = await self.get_tg_web_data(proxy=self.proxy)
+            http_client.headers["X-Auth-Token"] = self.tg_web_data
+            game_status, user_info = await self.get_info_data(http_client=http_client)
             
-            bones_balance = user_info['data']['lostDogsWayUserInfo']['gameDogsBalance']
-            woof_balance = int(user_info['data']['lostDogsWayUserInfo']['woofBalance']) / 1000000000
+            
+            bones_balance = user_info['gameDogsBalance']
+            woof_balance = int(user_info['woofBalance']) / 1000000000
             logger.info(localization.get_message('tapper', 'balance_info').format(self.session_name, bones_balance, woof_balance))
-            prev_round_data = user_info['data']['lostDogsWayUserInfo']['prevRoundVote']
+            prev_round_data = user_info['prevRoundVote']
+            if isinstance(user_info.get('squad'), dict):
+                squad_name = user_info.get('squad', {}).get("name", localization.get_message('tapper', 'unknown_clan'))
+                logger.info(localization.get_message('tapper', 'squad_info_member').format(self.session_name, squad_name))
+            else:
+                logger.info(localization.get_message('tapper', 'squad_info_no_member').format(self.session_name))
+                
+                
             if prev_round_data:
                 
                 logger.info(localization.get_message('tapper', 'previous_round_completed').format(self.session_name))
-                # squad = user_info['data']['lostDogsWayUserInfo']['squad']
-                # squad_name = squad.get("name", 'Неизвестный клан')
-                # logger.info(f"{self.session_name} | Вы были в клане <m>{squad_name}</m>") 
                 prize = round(int(prev_round_data['woofPrize']) / 1000000000, 2)
                 if prev_round_data['userStatus'] == 'winner':
                     not_prize = round(int(prev_round_data['notPrize']) / 1000000000, 2)
@@ -464,7 +475,7 @@ class Tapper:
             await self.processing_tasks(http_client=http_client)
             await asyncio.sleep(delay=randint(5, 10))               
             
-            current_round = user_info['data']['lostDogsWayUserInfo'].get('currentRoundVote')
+            current_round = user_info.get('currentRoundVote', None)
             if current_round is None:
                 if card_number is not None:
                     await self.way_vote(http_client=http_client, card_number=card_number)
@@ -477,9 +488,7 @@ class Tapper:
                 else:
                     logger.warning(localization.get_message('tapper', 'invalid_round_data').format(self.session_name, current_round))
 
-            game_status = await self.get_game_status(http_client=http_client)
             if game_status and 'gameState' in game_status:
-                await self.safe_gameState(game_status['gameState'])
                 game_end_at = datetime.fromtimestamp(int(game_status['gameState'].get('gameEndsAt', 0)))
                 round_end_at = max(game_status['gameState'].get('roundEndsAt', 0) - time(), 0)
                 logger.info(localization.get_message('tapper', 'game_status').format(self.session_name, int(round_end_at / 60), game_end_at))
@@ -521,8 +530,6 @@ class Tapper:
             await self.check_proxy(http_client=http_client, proxy=self.proxy)
         
         await self.run_bot_cycle(http_client, card_number)
-
-tapper_instances = {}
 
 async def run_tapper(tg_client: Client, proxy: str | None):
     try:
