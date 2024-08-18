@@ -5,9 +5,9 @@ from aiogram.types import InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import asyncio
 from time import time
-from bot.core.tapper import vote_card_for_all_tappers, vote_card_for_tapper_by_name, tapper_instances, get_global_gameState
-from bot.config.config import settings, localization
-from bot.utils import logger
+from ..core import *
+from ..config import *
+from . import logger
 
 class TelegramBot:
     def __init__(self, token: str):

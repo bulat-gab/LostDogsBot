@@ -26,7 +26,7 @@
 | **RANDOM_DELAY_IN_RUN**      | Рандомная задержка при запуске _(напр. [0, 15])
 _                                               |
 | **USE_RANDOM_DELAY_IN_RUN**  | Использовать ли фейковый юзер-агент _(True / False)_                               |
-| **USE_PROXY_FROM_FILE** | Использовать-ли прокси из файла `bot/config/proxies.txt`  _(True / False) |
+| **USE_PROXY_FROM_FILE** | Использовать-ли прокси из файла `proxies.txt`  _(True / False) |
 
 ## Команды бота
 | Команда               |                                Описание                                 |
