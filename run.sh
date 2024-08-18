@@ -30,9 +30,9 @@ if [ ! -f ".env" ]; then
 else
 	echo "Skipping .env copying"
 fi
-
-echo "Starting the bot..."
-python3 main.py
-
-echo "done"
-echo "PLEASE EDIT .ENV FILE"
+while true
+do
+	python3.11 main.py -a 2
+	echo Restarting the program in 10 seconds...
+	sleep 10
+done

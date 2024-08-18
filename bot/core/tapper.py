@@ -145,27 +145,25 @@ class Tapper:
         url = "https://api.getgems.io/graphql?operationName=getHomePage&variables=%7B%7D&extensions=%7B%22persistedQuery%22%3A%7B%22version%22%3A1%2C%22sha256Hash%22%3A%22d89d3ccd8d9fd69d37d181e2e8303ee78b80e6a26e4500c42e6d9f695257f9be%22%7D%7D"
         response = await self.make_request(http_client, 'GET', url)
         home_page_data = response.get('data', {})
-        game_status = home_page_data.get('lostDogsWayGameStatus', {})
-        user_info = home_page_data.get('lostDogsWayUserInfo', {})
         
-        if not user_info:
+        if not home_page_data:
             error = response.get("errors", [{}])[0].get("message")
             if error == "User not found":
                 register_response = await self.register_user(http_client=http_client)
                 if register_response:
                     logger.success(localization.get_message('tapper', 'user_registered').format(self.session_name, register_response['nickname'], register_response['id']))
+                    await asyncio.sleep(delay=random.randint(3, 7))
                     return await self.get_info_data(http_client=http_client)
             else:
                 logger.error(localization.get_message('tapper', 'server_error').format(self.session_name, error))
                 await asyncio.sleep(delay=random.randint(3, 7))
-                return None, None
         
-        if game_status.get('gameState', None) is not None:
-                set_global_gameState(game_status['gameState'])
-        else:
-            logger.info(game_status)
-            logger.info(f"{self.session_name} | gameState is None")
-
+        game_status = home_page_data.get('lostDogsWayGameStatus', None)
+        user_info = home_page_data.get('lostDogsWayUserInfo', None)
+        
+        if game_status and game_status.get('gameState', {}):
+            set_global_gameState(game_status['gameState'])
+        
         json_data = {
             'launch': True,
             'timeMs': int(time() * 1000)
@@ -351,6 +349,13 @@ class Tapper:
         http_client.headers["X-Auth-Token"] = self.tg_web_data
         
         game_status, user_info = await self.get_info_data(http_client)
+        if game_status is None or user_info is None:
+            sleep_time = random.randint(settings.SLEEP_TIME[0], settings.SLEEP_TIME[1])
+            logger.error(localization.get_message('tapper', 'info_data_none'))
+            logger.info(localization.get_message('tapper', 'sleep_info').format(self.session_name, sleep_time))
+            await asyncio.sleep(delay=sleep_time)
+            return
+        
         
         bones_balance = user_info['gameDogsBalance']
         woof_balance = int(user_info['woofBalance']) / 1000000000

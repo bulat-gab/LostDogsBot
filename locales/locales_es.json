@@ -13,6 +13,7 @@
         "proxy_error": "{} | Proxy: {} | Error: {}",
         "invalid_session": "{} | Sesión inválida",
         "unknown_error": "{} | Error desconocido: {}",
+        "info_data_none": "El estado del juego o la información del usuario no está disponible. Por favor, espere un momento, puede resolverse en el próximo ciclo.",
         "squad_info_member": "{} | Usted es miembro del clan <m>{}</m>",
         "squad_info_no_member": "{} | Usted no es miembro de ningún clan",
         "unknown_clan": "Clan desconocido",

@@ -14,6 +14,7 @@
         "invalid_session": "{} | Invalid session",
         "vote_card": "{} | Voted for card: {}",
         "unknown_error": "{} | Unknown error: {}",
+        "info_data_none": "Game status or user info is unavailable. Please wait a moment, it may resolve in the next cycle.",
         "squad_info_member": "{} | You are a member of the clan <m>{}</m>",
         "squad_info_no_member": "{} | You are not a member of any clan",
         "unknown_clan": "Unknown clan",

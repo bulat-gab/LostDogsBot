@@ -1,5 +1,4 @@
 @echo off
-
 if not exist venv (
     echo Creating virtual environment...
     python -m venv venv
@@ -30,8 +29,8 @@ if not exist .env (
 )
 
 echo Starting the bot...
-python main.py
-
-echo done
-echo PLEASE EDIT .ENV FILE
-pause
+:loop
+python main.py -a 2
+echo Restarting the program in 10 seconds...
+timeout /t 10 /nobreak >nul
+goto :loop
