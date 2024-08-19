@@ -217,7 +217,7 @@ class Tapper:
                 await asyncio.sleep(random.randint(5, 10))
                 logger.info(localization.get_message('tapper', 'processing_tasks').format(self.session_name, task['name']))
                 response_data = await self.perform_task(http_client, task['id'])
-                if response_data and response_data.get('success', 'false') == 'true':
+                if response_data and response_data.get('success', False) is True:
                     reward_amount = int(response_data.get('woofReward', 0)) / 1000000000
                     logger.success(localization.get_message('tapper', 'task_completed').format(self.session_name, response_data['task']['name'], reward_amount))
                 else:
@@ -229,7 +229,7 @@ class Tapper:
                 await asyncio.sleep(random.randint(5, 10))
                 logger.info(localization.get_message('tapper', 'processing_tasks').format(self.session_name, task['name']))
                 response_data = await self.perform_common_task(http_client, task['id'])
-                if response_data and response_data.get('success', 'false') == 'true':
+                if response_data and response_data.get('success', False) is True:
                     reward_amount = int(response_data.get('woofReward', 0)) / 1000000000
                     logger.success(localization.get_message('tapper', 'task_completed').format(self.session_name, response_data['task']['name'], reward_amount))
                 else:
