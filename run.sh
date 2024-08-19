@@ -32,7 +32,7 @@ else
 fi
 while true
 do
-	python3.11 main.py -a 2
+	python3.11 main.py
 	echo Restarting the program in 10 seconds...
 	sleep 10
 done
