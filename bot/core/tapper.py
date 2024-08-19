@@ -142,10 +142,10 @@ class Tapper:
     
     async def game_urls(self, http_client, type):
         urls = {
-            'personalTasks': "?operationName=lostDogsWayWoofPersonalTasks&variables=%7B%7D&extensions=%7B%22persistedQuery%22%3A%7B%22version%22%3A1%2C%22sha256Hash%22%3A%22d94df8d9fce5bfdd4913b6b3b6ab71e2f9d6397e2a17de78872f604b9c53fe79%22%7D%7D",
-            'commonTasks': "?operationName=lostDogsWayCommonTasks&variables=%7B%7D&extensions=%7B%22persistedQuery%22%3A%7B%22version%22%3A1%2C%22sha256Hash%22%3A%227c4ca1286c2720dda55661e40d6cb18a8f813bed50c2cf6158d709a116e1bdc1%22%7D%7D",
-            'doneCommonTasks': "?operationName=lostDogsWayUserCommonTasksDone&variables=%7B%7D&extensions=%7B%22persistedQuery%22%3A%7B%22version%22%3A1%2C%22sha256Hash%22%3A%2299a387150779864b6b625e336bfd28bbc8064b66f9a1b6a55ee96b8777678239%22%7D%7D",
+            
+            'dogsPage': "?operationName=getDogsPage&variables=%7B%22withCommonTasks%22%3Atrue%7D&extensions=%7B%22persistedQuery%22%3A%7B%22version%22%3A1%2C%22sha256Hash%22%3A%22a23b386ba13302517841d83364cd25ea6fcbf07e1a34a40a5314da8cfd1c6565%22%7D%7D",
             'homePage': "?operationName=getHomePage&variables=%7B%7D&extensions=%7B%22persistedQuery%22%3A%7B%22version%22%3A1%2C%22sha256Hash%22%3A%22d89d3ccd8d9fd69d37d181e2e8303ee78b80e6a26e4500c42e6d9f695257f9be%22%7D%7D",
+            'personalTasks': "?operationName=lostDogsWayWoofPersonalTasks&variables=%7B%7D&extensions=%7B%22persistedQuery%22%3A%7B%22version%22%3A1%2C%22sha256Hash%22%3A%22d94df8d9fce5bfdd4913b6b3b6ab71e2f9d6397e2a17de78872f604b9c53fe79%22%7D%7D"
         }
         return await self.make_request(http_client, 'GET', urls[type])
 
@@ -197,23 +197,19 @@ class Tapper:
         }
         response = await self.make_request(http_client, 'POST', json=json_data)
         return response['data']['lostDogsWayGenerateWallet']['user']
-
-    @error_handler
-    @retry_with_backoff()
-    async def get_done_common_tasks(self, http_client: aiohttp.ClientSession):
-        response = await self.game_urls(http_client, "doneCommonTasks")
-        return response['data']['lostDogsWayUserCommonTasksDone']
     
     @error_handler
     @retry_with_backoff()
     async def process_tasks(self, http_client):
+        tasks = await self.game_urls(http_client, 'dogsPage')
         personal_tasks = await self.game_urls(http_client, 'personalTasks')
-        common_tasks = await self.game_urls(http_client, 'commonTasks')
+        done_tasks = tasks.get('data',{}).get('lostDogsWayUserCommonTasksDone', {})
+        common_tasks = tasks.get('data',{}).get('lostDogsWayCommonTasks', {})
         
         await self.save_game_event(http_client, {"commonPageView": "yourDog", "timeMs": int(time() * 1000)}, "Common Page View")
         
-        for task in personal_tasks['data']['lostDogsWayWoofPersonalTasks']['items']:
-            if not task['isCompleted'] and task['id'] not in ['connectWallet', 'joinSquad']:
+        for task in personal_tasks.get('data', {}).get('lostDogsWayWoofPersonalTasks', {}).get('items'):
+            if not task.get('isCompleted') and task.get('id') not in ['connectWallet', 'joinSquad']:
                 await asyncio.sleep(random.randint(5, 10))
                 logger.info(localization.get_message('tapper', 'processing_tasks').format(self.session_name, task['name']))
                 response_data = await self.perform_task(http_client, task['id'])
@@ -222,18 +218,18 @@ class Tapper:
                     logger.success(localization.get_message('tapper', 'task_completed').format(self.session_name, response_data['task']['name'], reward_amount))
                 else:
                     logger.info(localization.get_message('tapper', 'task_failed').format(self.session_name, task['name']))
-
-        done_tasks = await self.get_done_common_tasks(http_client)
-        for task in common_tasks['data']['lostDogsWayCommonTasks']['items']:
-            if task['id'] not in done_tasks and task.get('customCheckStrategy') is None:
+                    
+        for task in common_tasks.get('items'):
+            if task.get('id') not in done_tasks and task.get('customCheckStrategy') is None:
                 await asyncio.sleep(random.randint(5, 10))
                 logger.info(localization.get_message('tapper', 'processing_tasks').format(self.session_name, task['name']))
-                response_data = await self.perform_common_task(http_client, task['id'])
+                response_data = (await self.perform_common_task(http_client, task['id'])).get('data', {}).get('lostDogsWayCompleteCommonTask', {})
                 if response_data and response_data.get('success', False) is True:
                     reward_amount = int(response_data.get('woofReward', 0)) / 1000000000
                     logger.success(localization.get_message('tapper', 'task_completed').format(self.session_name, response_data['task']['name'], reward_amount))
                 else:
                     logger.info(localization.get_message('tapper', 'task_failed').format(self.session_name, task['name']))
+
 
     @error_handler
     @retry_with_backoff()
@@ -249,7 +245,6 @@ class Tapper:
             }
         }
         return await self.make_request(http_client, 'POST', json=json_data)
-
     @error_handler
     @retry_with_backoff()
     async def perform_common_task(self, http_client, task_id):
@@ -305,6 +300,22 @@ class Tapper:
                 "persistedQuery": {
                     "version": 1,
                     "sha256Hash": "6fc1d24c3d91a69ebf7467ebbed43c8837f3d0057a624cdb371786477c12dc2f"
+                }
+            }
+        }
+        return await self.make_request(http_client, 'POST', json=json_data)
+    
+    
+    @error_handler
+    @retry_with_backoff()
+    async def view_prev_round(self, http_client: aiohttp.ClientSession):
+        json_data = {
+            "operationName": "lostDogsWayViewPrevRound",
+            "variables": {},
+            "extensions": {
+                "persistedQuery": {
+                    "version": 1,
+                    "sha256Hash": "9d71c4ff04d1f8ec24f23decd0506e7b1b8a0c70ea6bb4c98fcaf6904eb96c35"
                 }
             }
         }
