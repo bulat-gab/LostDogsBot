@@ -134,16 +134,26 @@ class Tapper:
             await asyncio.sleep(delay=3)
             
     @retry_with_backoff()
-    async def make_request(self, http_client, method, url, **kwargs):
-        async with http_client.request(method, url, **kwargs) as response:
+    async def make_request(self, http_client, method, endpoint=None, url=None, **kwargs):
+        full_url = url or f"https://api.getgems.io/graphql{endpoint or ''}"
+        async with http_client.request(method, full_url, **kwargs) as response:
             response.raise_for_status()
             return await response.json()
+    
+    async def game_urls(self, http_client, type):
+        urls = {
+            'personalTasks': "?operationName=lostDogsWayWoofPersonalTasks&variables=%7B%7D&extensions=%7B%22persistedQuery%22%3A%7B%22version%22%3A1%2C%22sha256Hash%22%3A%22d94df8d9fce5bfdd4913b6b3b6ab71e2f9d6397e2a17de78872f604b9c53fe79%22%7D%7D",
+            'commonTasks': "?operationName=lostDogsWayCommonTasks&variables=%7B%7D&extensions=%7B%22persistedQuery%22%3A%7B%22version%22%3A1%2C%22sha256Hash%22%3A%227c4ca1286c2720dda55661e40d6cb18a8f813bed50c2cf6158d709a116e1bdc1%22%7D%7D",
+            'doneCommonTasks': "?operationName=lostDogsWayUserCommonTasksDone&variables=%7B%7D&extensions=%7B%22persistedQuery%22%3A%7B%22version%22%3A1%2C%22sha256Hash%22%3A%2299a387150779864b6b625e336bfd28bbc8064b66f9a1b6a55ee96b8777678239%22%7D%7D",
+            'homePage': "?operationName=getHomePage&variables=%7B%7D&extensions=%7B%22persistedQuery%22%3A%7B%22version%22%3A1%2C%22sha256Hash%22%3A%22d89d3ccd8d9fd69d37d181e2e8303ee78b80e6a26e4500c42e6d9f695257f9be%22%7D%7D",
+        }
+        return await self.make_request(http_client, 'GET', urls[type])
 
+    
     @error_handler
     @retry_with_backoff()
     async def get_info_data(self, http_client):
-        url = "https://api.getgems.io/graphql?operationName=getHomePage&variables=%7B%7D&extensions=%7B%22persistedQuery%22%3A%7B%22version%22%3A1%2C%22sha256Hash%22%3A%22d89d3ccd8d9fd69d37d181e2e8303ee78b80e6a26e4500c42e6d9f695257f9be%22%7D%7D"
-        response = await self.make_request(http_client, 'GET', url)
+        response = await self.game_urls(http_client, "homePage")
         home_page_data = response.get('data', {})
         
         if not home_page_data:
@@ -185,28 +195,20 @@ class Tapper:
                 }
             }
         }
-        response = await self.make_request(http_client, 'POST', 'https://api.getgems.io/graphql', json=json_data)
+        response = await self.make_request(http_client, 'POST', json=json_data)
         return response['data']['lostDogsWayGenerateWallet']['user']
-
-    async def get_tasks(self, http_client, task_type):
-        urls = {
-            'personal': "https://api.getgems.io/graphql?operationName=lostDogsWayWoofPersonalTasks&variables=%7B%7D&extensions=%7B%22persistedQuery%22%3A%7B%22version%22%3A1%2C%22sha256Hash%22%3A%22d94df8d9fce5bfdd4913b6b3b6ab71e2f9d6397e2a17de78872f604b9c53fe79%22%7D%7D",
-            'common': "https://api.getgems.io/graphql?operationName=lostDogsWayCommonTasks&variables=%7B%7D&extensions=%7B%22persistedQuery%22%3A%7B%22version%22%3A1%2C%22sha256Hash%22%3A%227c4ca1286c2720dda55661e40d6cb18a8f813bed50c2cf6158d709a116e1bdc1%22%7D%7D"
-        }
-        return await self.make_request(http_client, 'GET', urls[task_type])
-
 
     @error_handler
     @retry_with_backoff()
     async def get_done_common_tasks(self, http_client: aiohttp.ClientSession):
-        url = f'https://api.getgems.io/graphql?operationName=lostDogsWayUserCommonTasksDone&variables=%7B%7D&extensions=%7B%22persistedQuery%22%3A%7B%22version%22%3A1%2C%22sha256Hash%22%3A%2299a387150779864b6b625e336bfd28bbc8064b66f9a1b6a55ee96b8777678239%22%7D%7D'
-        response = await self.make_request(http_client, 'GET', url)
+        response = await self.game_urls(http_client, "doneCommonTasks")
         return response['data']['lostDogsWayUserCommonTasksDone']
     
-    
+    @error_handler
+    @retry_with_backoff()
     async def process_tasks(self, http_client):
-        personal_tasks = await self.get_tasks(http_client, 'personal')
-        common_tasks = await self.get_tasks(http_client, 'common')
+        personal_tasks = await self.game_urls(http_client, 'personalTasks')
+        common_tasks = await self.game_urls(http_client, 'commonTasks')
         
         await self.save_game_event(http_client, {"commonPageView": "yourDog", "timeMs": int(time() * 1000)}, "Common Page View")
         
@@ -215,7 +217,7 @@ class Tapper:
                 await asyncio.sleep(random.randint(5, 10))
                 logger.info(localization.get_message('tapper', 'processing_tasks').format(self.session_name, task['name']))
                 response_data = await self.perform_task(http_client, task['id'])
-                if response_data and response_data['success']:
+                if response_data and response_data.get('success', 'false') == 'true':
                     reward_amount = int(response_data.get('woofReward', 0)) / 1000000000
                     logger.success(localization.get_message('tapper', 'task_completed').format(self.session_name, response_data['task']['name'], reward_amount))
                 else:
@@ -227,12 +229,13 @@ class Tapper:
                 await asyncio.sleep(random.randint(5, 10))
                 logger.info(localization.get_message('tapper', 'processing_tasks').format(self.session_name, task['name']))
                 response_data = await self.perform_common_task(http_client, task['id'])
-                if response_data and response_data['success']:
+                if response_data and response_data.get('success', 'false') == 'true':
                     reward_amount = int(response_data.get('woofReward', 0)) / 1000000000
                     logger.success(localization.get_message('tapper', 'task_completed').format(self.session_name, response_data['task']['name'], reward_amount))
                 else:
                     logger.info(localization.get_message('tapper', 'task_failed').format(self.session_name, task['name']))
 
+    @error_handler
     @retry_with_backoff()
     async def perform_task(self, http_client, task_id):
         json_data = {
@@ -245,8 +248,9 @@ class Tapper:
                 }
             }
         }
-        return await self.make_request(http_client, 'POST', 'https://api.getgems.io/graphql', json=json_data)
+        return await self.make_request(http_client, 'POST', json=json_data)
 
+    @error_handler
     @retry_with_backoff()
     async def perform_common_task(self, http_client, task_id):
         json_data = {
@@ -259,10 +263,13 @@ class Tapper:
                 }
             }
         }
-        response = await self.make_request(http_client, 'POST', 'https://api.getgems.io/graphql', json=json_data)
+        response = await self.make_request(http_client, 'POST', json=json_data)
         await self.save_game_event(http_client, {'timeMs': int(time() * 1000), 'yourDogGetFreeDogs': True}, "Complete Task")
         return response
+    
+    
     @error_handler
+    @retry_with_backoff()
     async def join_squad(self, http_client: aiohttp.ClientSession, card_number: int):        
         squad_options = {1: "whogm", 2: "hadgm", 3: "fewgm"}
         squad = squad_options.get(card_number, "whogm")
@@ -283,6 +290,7 @@ class Tapper:
         else:
             logger.warning(localization.get_message('tapper', 'squad_join_fail').format(self.session_name, squad, join_response.status))
 
+    @error_handler
     @retry_with_backoff()
     async def way_vote(self, http_client, card_number):
         #await self.join_squad(http_client=http_client, card_number=card_number) # Вступаем в сквад
@@ -300,7 +308,7 @@ class Tapper:
                 }
             }
         }
-        return await self.make_request(http_client, 'POST', 'https://api.getgems.io/graphql', json=json_data)
+        return await self.make_request(http_client, 'POST', json=json_data)
     
     @error_handler
     @retry_with_backoff()
@@ -326,7 +334,7 @@ class Tapper:
                 }
             }
         }
-        response = await self.make_request(http_client, 'POST', 'https://api.getgems.io/graphql', json=json_data)
+        response = await self.make_request(http_client, 'POST', json=json_data)
         if not response['data']['lostDogsWaySaveEvent']:
             logger.warning(localization.get_message('tapper', 'save_event_failed').format(self.session_name, event_name))
     
@@ -334,7 +342,7 @@ class Tapper:
     @error_handler
     @retry_with_backoff()
     async def check_proxy(self, http_client: aiohttp.ClientSession, proxy: Proxy) -> None:
-        response = await self.make_request(http_client, 'GET', 'https://httpbin.org/ip', timeout=aiohttp.ClientTimeout(5))
+        response = await self.make_request(http_client, 'GET', url='https://httpbin.org/ip', timeout=aiohttp.ClientTimeout(5))
         ip = response.get('origin')
         logger.info(localization.get_message('tapper', 'proxy_check').format(self.session_name, ip))
 
