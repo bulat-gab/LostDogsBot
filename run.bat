@@ -30,7 +30,7 @@ if not exist .env (
 
 echo Starting the bot...
 :loop
-python main.py -a 2
+python main.py
 echo Restarting the program in 10 seconds...
 timeout /t 10 /nobreak >nul
 goto :loop
