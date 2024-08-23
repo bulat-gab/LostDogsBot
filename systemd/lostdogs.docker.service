@@ -1,0 +1,13 @@
+[Unit]
+After=docker.service
+Description=Run docker compose LostDogsBot
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/root/LostDogsBot
+ExecStart=/usr/bin/docker compose -f /root/LostDogsBot/docker-compose.yml up -d --remove-orphans
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
