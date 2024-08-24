@@ -13,7 +13,7 @@ from aiocfscrape import CloudflareScraper
 from aiohttp_proxy import ProxyConnector
 from better_proxy import Proxy
 from pyrogram import Client
-from pyrogram.errors import Unauthorized, UserDeactivated, AuthKeyUnregistered
+from pyrogram.errors import Unauthorized, UserDeactivated, AuthKeyUnregistered, FloodWait
 from pyrogram.raw import types
 from pyrogram.raw.functions.messages import RequestAppWebView
 
@@ -91,7 +91,16 @@ class Tapper:
                 except (Unauthorized, UserDeactivated, AuthKeyUnregistered):
                     raise InvalidSession(self.session_name)
                 
-            peer = await self.tg_client.resolve_peer('lost_dogs_bot')
+            while True:
+                try:
+                    peer = await self.tg_client.resolve_peer('lost_dogs_bot')
+                    break
+                except FloodWait as fl:
+                    fls = fl.value
+
+                    logger.warning(f"{self.session_name} | FloodWait {fl}")
+                    logger.info(f"{self.session_name} | Sleep {fls}s")
+                    await asyncio.sleep(fls + 3)
             web_view = await self.tg_client.invoke(RequestAppWebView(
                 peer=peer,
                 platform='android',
@@ -245,6 +254,7 @@ class Tapper:
             }
         }
         return await self.make_request(http_client, 'POST', json=json_data)
+    
     @error_handler
     @retry_with_backoff()
     async def perform_common_task(self, http_client, task_id):
