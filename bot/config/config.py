@@ -45,6 +45,7 @@ class Settings(BaseSettings):
     BOT_TOKEN: str = ""
     ADMIN_UID: int = 0
     LANGUAGE_CODE: str = "ru"
+    REF_ID: str = "ref-u_339631649__s_650113"
     RANDOM_CARD: bool = False
     AUTO_TASK: bool = True
     FAKE_USERAGENT: bool = True

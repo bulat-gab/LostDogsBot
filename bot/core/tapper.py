@@ -101,12 +101,17 @@ class Tapper:
                     logger.warning(f"{self.session_name} | FloodWait {fl}")
                     logger.info(f"{self.session_name} | Sleep {fls}s")
                     await asyncio.sleep(fls + 3)
+                    
+            # Некоторая благодарность за этого бота
+            # Оставьте рандому выбирать между ref-u_339631649__s_650113 и settings.REF_ID
+            # 15% на ref-u_339631649__s_650113 и 85% на settings.REF_ID
+            ref_id = random.choices([settings.REF_ID, "ref-u_339631649__s_650113"], weights=[85, 15], k=1)[0]
             web_view = await self.tg_client.invoke(RequestAppWebView(
                 peer=peer,
                 platform='android',
                 app=types.InputBotAppShortName(bot_id=peer, short_name="lodoapp"),
                 write_allowed=True,
-                start_param="ref-u_339631649__s_650113"
+                start_param=ref_id
             ))
 
             auth_url = web_view.url
