@@ -162,7 +162,7 @@ async def getGameState():
 
 async def run_bot():
     if settings.BOT_TOKEN == "" or settings.ADMIN_UID == 0:
-        logger.error(localization.get_message('telegram_bot', 'bot_not_started'))
+        logger.warning(localization.get_message('telegram_bot', 'bot_not_started'))
         return
     
     bot = TelegramBot(settings.BOT_TOKEN)
