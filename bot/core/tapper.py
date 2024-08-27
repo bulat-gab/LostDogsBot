@@ -67,6 +67,7 @@ class Tapper:
         self.session_name = tg_client.name
         self.proxy = proxy
         self.tg_web_data = None
+        self.tg_web_data_not = None
 
     async def get_tg_web_data(self, proxy: str | None) -> str:
         if proxy:
@@ -139,6 +140,69 @@ class Tapper:
                 await self.tg_client.disconnect()
 
             return init_data
+
+        except InvalidSession as error:
+            raise error
+
+        except Exception as error:
+            logger.error(localization.get_message('tapper', 'unknown_error').format(self.session_name, error))
+            await asyncio.sleep(delay=3)
+    
+    
+    async def get_tg_web_data_not(self, proxy: str | None) -> str:
+        if proxy:
+            proxy = Proxy.from_str(proxy)
+            proxy_dict = dict(
+                scheme=proxy.protocol,
+                hostname=proxy.host,
+                port=proxy.port,
+                username=proxy.login,
+                password=proxy.password
+            )
+        else:
+            proxy_dict = None
+
+        self.tg_client.proxy = proxy_dict
+
+        try:
+            with_tg = True
+
+            if not self.tg_client.is_connected:
+                with_tg = False
+                try:
+                    await self.tg_client.connect()
+                except (Unauthorized, UserDeactivated, AuthKeyUnregistered):
+                    raise InvalidSession(self.session_name)
+
+            while True:
+                try:
+                    peer = await self.tg_client.resolve_peer('notgames_bot')
+                    break
+                except FloodWait as fl:
+                    fls = fl.value
+
+                    logger.warning(f"<light-yellow>{self.session_name}</light-yellow> | FloodWait {fl}")
+                    logger.info(f"<light-yellow>{self.session_name}</light-yellow> | Sleep {fls}s")
+
+                    await asyncio.sleep(fls + 3)
+
+            InputBotApp = types.InputBotAppShortName(bot_id=peer, short_name="squads")
+
+            web_view = await self.tg_client.invoke(RequestAppWebView(
+                peer=peer,
+                app=InputBotApp,
+                platform='android',
+                write_allowed=True,
+            ))
+
+            auth_url = web_view.url
+            tg_web_data = unquote(
+                string=auth_url.split('tgWebAppData=', maxsplit=1)[1].split('&tgWebAppVersion', maxsplit=1)[0])
+
+            if with_tg is False:
+                await self.tg_client.disconnect()
+
+            return tg_web_data
 
         except InvalidSession as error:
             raise error
@@ -276,35 +340,42 @@ class Tapper:
         response = await self.make_request(http_client, 'POST', json=json_data)
         await self.save_game_event(http_client, {'timeMs': int(time() * 1000), 'yourDogGetFreeDogs': True}, "Complete Task")
         return response
-    
-    
+
     @error_handler
     @retry_with_backoff()
-    async def join_squad(self, http_client: aiohttp.ClientSession, card_number: int):        
+    async def join_squad(self, http_client: aiohttp.ClientSession, card_number: int):
         squad_options = {1: "whogm", 2: "hadgm", 3: "fewgm"}
         squad = squad_options.get(card_number, "whogm")
         local_headers = deepcopy(headers_notcoin)
-        
-        response = await http_client.post('https://api.notcoin.tg/auth/login', headers=local_headers, json={"webAppData": self.tg_web_data})
+
+        response = await http_client.post('https://api.notcoin.tg/auth/login', headers=local_headers,
+                                          json={"webAppData": self.tg_web_data_not})
         accessToken = json.loads(await response.text()).get("data", {}).get("accessToken")
-        
+
         if not accessToken:
             logger.error(localization.get_message('tapper', 'x_auth_token_not_found').format(self.session_name))
             return
-        
+
         local_headers['X-Auth-Token'] = f'Bearer {accessToken}'
-        join_response = await http_client.get(f'https://api.notcoin.tg/squads/{squad}/join', headers=local_headers)
-        
-        if join_response.status == 200:
+        info_response = await http_client.get(url=f'https://api.notcoin.tg/squads/by/slug/{squad}',
+                                              headers=local_headers)
+        info_json = await info_response.json()
+        chat_id = info_json['data']['squad']['chatId']
+
+        join_response = await http_client.post(f'https://api.notcoin.tg/squads/{squad}/join', headers=local_headers,
+                                               json={'chatId': chat_id})
+
+        if join_response.status in [200, 201]:
             logger.success(localization.get_message('tapper', 'squad_join_success').format(self.session_name, squad))
         else:
             logger.warning(localization.get_message('tapper', 'squad_join_fail').format(self.session_name, squad, join_response.status))
 
+
     @error_handler
     @retry_with_backoff()
     async def way_vote(self, http_client, card_number):
-        #await self.join_squad(http_client=http_client, card_number=card_number) # Вступаем в сквад
-        #await asyncio.sleep(delay=3)
+        await self.join_squad(http_client=http_client, card_number=card_number) # Вступаем в сквад
+        await asyncio.sleep(delay=3)
         await self.save_game_event(http_client, {"mainScreenVote": True, "timeMs": int(time() * 1000)}, "MainScreen Vote")
         await asyncio.sleep(random.randint(1, 3))
         
@@ -380,6 +451,7 @@ class Tapper:
             await asyncio.sleep(random_delay)
         
         self.tg_web_data = await self.get_tg_web_data(proxy=self.proxy)
+        self.tg_web_data_not = await self.get_tg_web_data_not(proxy=self.proxy)
         http_client.headers["X-Auth-Token"] = self.tg_web_data
         
         game_status, user_info = await self.get_info_data(http_client)

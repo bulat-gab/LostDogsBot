@@ -1,4 +1,4 @@
-from ..config import *
+from bot.config import *
 
 headers = {
     'Accept': 'application/json',
@@ -19,10 +19,10 @@ headers = {
 }
 
 headers_notcoin = {
-    'Accept': 'application/json',
+    'Accept': '*/*',
     'Accept-Language': f'{settings.LANGUAGE_CODE},{settings.LANGUAGE_CODE};q=0.9,en-US;q=0.8,en;q=0.7',
-    'Content-Type': 'application/json',
     'Connection': 'keep-alive',
+    'Content-Lenght': '0',
     'Origin': 'https://webapp.notcoin.tg',
     'Referer': 'https://webapp.notcoin.tg/',
     'Sec-Fetch-Dest': 'empty',
@@ -33,4 +33,5 @@ headers_notcoin = {
     'Sec-Ch-Ua-platform': '"Android"',
     'User-Agent': 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.6422.165 Mobile Safari/537.36',
     'X-Auth-Token': 'Bearer null',
+    'bypass-tunnel-reminder': 'x'
 }
