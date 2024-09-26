@@ -293,7 +293,12 @@ class Tapper:
                 else:
                     logger.info(localization.get_message('tapper', 'task_failed').format(self.session_name, task['name']))
                     
-        for task in common_tasks.get('items'):
+        common_tasks_items = common_tasks.get('items')
+        if not common_tasks_items:
+            logger.warning("lostDogsWayCommonTasks are empty.")
+            return
+
+        for task in common_tasks_items:
             if task.get('id') not in done_tasks and task.get('customCheckStrategy') is None:
                 await asyncio.sleep(random.randint(5, 10))
                 logger.info(localization.get_message('tapper', 'processing_tasks').format(self.session_name, task['name']))
